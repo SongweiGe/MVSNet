@@ -67,6 +67,9 @@ def triangulationRPC(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     p2_2 = rpc2.row_den
     p3_2 = rpc2.col_num
     p4_2 = rpc2.col_den
+
+    # r1, c1, r2, c2
+
     r1 = (ru1-rpc1.row_offset)/rpc1.row_scale
     c1 = (cu1-rpc1.col_offset)/rpc1.col_scale
     r2 = (ru2-rpc2.row_offset)/rpc2.row_scale
@@ -133,7 +136,7 @@ def triangulationRPC(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     # np.linalg.lstsq(A, b)
     DeltaXu=LSsol[2]
     DeltaYu=LSsol[1]
-    DeltaZu=100
+    DeltaZu=LSsol[0]
     # DeltaZu=10
     # next iterations
     Niter=5
@@ -146,7 +149,6 @@ def triangulationRPC(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     Xunew_2=DeltaXu
     Yunew_2=DeltaYu
     Zunew_2=DeltaZu
-    # import ipdb;ipdb.set_trace()
     NormupdateX_1=RPCnormalization(DeltaXu,Xo_1,Xs_1)    
     NormupdateY_1=RPCnormalization(DeltaYu,Yo_1,Ys_1)
     NormupdateZ_1=RPCnormalization(DeltaZu,Zo_1,Zs_1)
@@ -161,6 +163,7 @@ def triangulationRPC(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     NormZnew_2=NormZold+NormupdateZ_2
     error_residual_old=10e10
     cnt=0
+    # import ipdb;ipdb.set_trace()
     for it in range(Niter):
         # system eqs
         # partial derivatives
@@ -226,11 +229,11 @@ def triangulationRPC(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         # solution        
         LSsol=np.matmul(np.matmul(np.linalg.inv(np.matmul(A.T, A)), A.T),b)
         # sanity check np.matmul(A, LSsol)-b
-        if it == 3:
-            import ipdb;ipdb.set_trace()
-        DeltaXu=LSsol[2]
+        # if it == 3:
+        #     import ipdb;ipdb.set_trace()
+        DeltaXu=LSsol[0]
         DeltaYu=LSsol[1]
-        DeltaZu=LSsol[0]
+        DeltaZu=LSsol[2]
         # update unnormalized
         Xuold = Xunew_1
         Yuold = Yunew_1
