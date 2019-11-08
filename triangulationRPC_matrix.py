@@ -9,49 +9,49 @@ def RPCunnormalization(normdata,offset,scale):
     return normdata*scale+offset
 
 
-def RPCsinglepolynomialderivativeX_array(p,X,Y,Z):
+def RPCsinglepolynomialderivativeX_matrix(p,X,Y,Z):
     npoints = len(X)
     # monomial=[1 X Y Z X*Y X*Z Y*Z X**2 Y**2 Z**2 X*Y*Z X**3 X*Y**2 X*Z**2 X**2*Y Y**3 Y*Z**2 X**2*Z Y**2*Z Z**3]
-    monomial = np.array([np.zeros(npoints), np.ones(npoints), np.zeros(npoints), np.zeros(npoints), Y, Z, np.zeros(npoints), 
+    monomial = np.matrix([np.zeros(npoints), np.ones(npoints), np.zeros(npoints), np.zeros(npoints), Y, Z, np.zeros(npoints), 
                 2*X, np.zeros(npoints), np.zeros(npoints), Y*Z, 3*X**2, Y**2, Z**2, 2*X*Y, np.zeros(npoints), 
                 np.zeros(npoints), 2*X*Z, np.zeros(npoints), np.zeros(npoints)]) # 20 x npoints
     sol = np.sum(p.reshape(-1, 1)*monomial, 0)
     return sol
 
 
-def RPCsinglepolynomialderivativeY_array(p,X,Y,Z):
+def RPCsinglepolynomialderivativeY_matrix(p,X,Y,Z):
     npoints = len(X)
     # monomial=[1 X Y Z X*Y X*Z Y*Z X**2 Y**2 Z**2 X*Y*Z X**3 X*Y**2 X*Z**2 X**2*Y Y**3 Y*Z**2 X**2*Z Y**2*Z Z**3]
-    monomial = np.array([np.zeros(npoints), np.zeros(npoints), np.ones(npoints), np.zeros(npoints), X, np.zeros(npoints), Z, 
+    monomial = np.matrix([np.zeros(npoints), np.zeros(npoints), np.ones(npoints), np.zeros(npoints), X, np.zeros(npoints), Z, 
             np.zeros(npoints), 2*Y, np.zeros(npoints), X*Z, np.zeros(npoints), X*2*Y, np.zeros(npoints), 
             X**2, 3*Y**2, Z**2, np.zeros(npoints), 2*Y*Z, np.zeros(npoints)])
     sol = np.sum(p.reshape(-1, 1)*monomial, 0)
     return sol
    
 
-def RPCsinglepolynomialderivativeZ_array(p,X,Y,Z):
+def RPCsinglepolynomialderivativeZ_matrix(p,X,Y,Z):
     npoints = len(X)
     # monomial=[1 X Y Z X*Y X*Z Y*Z X**2 Y**2 Z**2 X*Y*Z X**3 X*Y**2 X*Z**2 X**2*Y Y**3 Y*Z**2 X**2*Z Y**2*Z Z**3]
-    monomial = np.array([np.zeros(npoints), np.zeros(npoints), np.zeros(npoints), np.ones(npoints), np.zeros(npoints), X, Y, 
+    monomial = np.matrix([np.zeros(npoints), np.zeros(npoints), np.zeros(npoints), np.ones(npoints), np.zeros(npoints), X, Y, 
             np.zeros(npoints), np.zeros(npoints), 2*Z, X*Y, np.zeros(npoints), np.zeros(npoints), X*2*Z, 
             np.zeros(npoints), np.zeros(npoints), Y*2*Z, X**2, Y**2, 3*Z**2])
     sol = np.sum(p.reshape(-1, 1)*monomial, 0)
     return sol 
 
 
-def RPCsinglepolynomial_array(p,X,Y,Z):
+def RPCsinglepolynomial_matrix(p,X,Y,Z):
     npoints = len(X)
-    monomial = np.array([np.ones(npoints), X, Y, Z, X*Y, X*Z, Y*Z, X**2, Y**2, Z**2, X*Y*Z, 
+    monomial = np.matrix([np.ones(npoints), X, Y, Z, X*Y, X*Z, Y*Z, X**2, Y**2, Z**2, X*Y*Z, 
                 X**3, X*Y**2, X*Z**2, X**2*Y, Y**3, Y*Z**2, X**2*Z, Y**2*Z, Z**3])
     sol = np.sum(p.reshape(-1, 1)*monomial, 0)
     return sol
 
 
-def RPCforwardform_array(p,q,X,Y,Z):
+def RPCforwardform_matrix(p,q,X,Y,Z):
     npoints = len(X)
     # num = np.zeros((npoints,20))
     # den = np.zeros((npoints,20))
-    monomial = np.array([np.ones(npoints), X, Y, Z, X*Y, X*Z, Y*Z, X**2, Y**2, Z**2, X*Y*Z, 
+    monomial = np.matrix([np.ones(npoints), X, Y, Z, X*Y, X*Z, Y*Z, X**2, Y**2, Z**2, X*Y*Z, 
                 X**3, X*Y**2, X*Z**2, X**2*Y, Y**3, Y*Z**2, X**2*Z, Y**2*Z, Z**3])
     num = np.sum(p.reshape(-1, 1)*monomial, 0)
     den = np.sum(q.reshape(-1, 1)*monomial, 0)
@@ -61,17 +61,17 @@ def RPCforwardform_array(p,q,X,Y,Z):
     return pixel_coordinate
 
 
-def triangulationRPC_array(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
+def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     npoints = len(ru1)
     #  setup Parameters based on the notation
-    p1_1 = np.array(rpc1.row_num, dtype=np.float64)
-    p2_1 = np.array(rpc1.row_den, dtype=np.float64)
-    p3_1 = np.array(rpc1.col_num, dtype=np.float64)
-    p4_1 = np.array(rpc1.col_den, dtype=np.float64)
-    p1_2 = np.array(rpc2.row_num, dtype=np.float64)
-    p2_2 = np.array(rpc2.row_den, dtype=np.float64)
-    p3_2 = np.array(rpc2.col_num, dtype=np.float64)
-    p4_2 = np.array(rpc2.col_den, dtype=np.float64)
+    p1_1 = np.matrix(rpc1.row_num, dtype=np.float64)
+    p2_1 = np.matrix(rpc1.row_den, dtype=np.float64)
+    p3_1 = np.matrix(rpc1.col_num, dtype=np.float64)
+    p4_1 = np.matrix(rpc1.col_den, dtype=np.float64)
+    p1_2 = np.matrix(rpc2.row_num, dtype=np.float64)
+    p2_2 = np.matrix(rpc2.row_den, dtype=np.float64)
+    p3_2 = np.matrix(rpc2.col_num, dtype=np.float64)
+    p4_2 = np.matrix(rpc2.col_den, dtype=np.float64)
 
     # r1, c1, r2, c2
 
@@ -132,11 +132,11 @@ def triangulationRPC_array(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     d2_2=p4_2[2]*Zs_2*Xs_2
     d3_2=p4_2[1]*Zs_2*Ys_2
     # ITERATION 1
-    A=np.array([[a1_1-r1*b1_1, a2_1-r1*b2_1, a3_1-r1*b3_1],
+    A=np.matrix([[a1_1-r1*b1_1, a2_1-r1*b2_1, a3_1-r1*b3_1],
         [c1_1-c1*d1_1, c2_1-c1*d2_1, c3_1-c1*d3_1],
         [a1_2-r2*b1_2, a2_2-r2*b2_2, a3_2-r2*b3_2],
         [c1_2-c2*d1_2, c2_2-c2*d2_2, c3_2-c2*d3_2]]) # 4 x 4 x npoints
-    b=np.array([r1*b0_1-a0_1,c1*d0_1-c0_1,r2*b0_2-a0_2,c2*d0_2-c0_2]) # 4 x npoints
+    b=np.matrix([r1*b0_1-a0_1,c1*d0_1-c0_1,r2*b0_2-a0_2,c2*d0_2-c0_2]) # 4 x npoints
     DeltaXu = np.zeros(npoints)
     DeltaYu = np.zeros(npoints)
     DeltaZu = np.zeros(npoints)
@@ -184,22 +184,22 @@ def triangulationRPC_array(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         # 1st camera
         # input needs to be normalized but the algorithm runs with
         # unnormalized updates (derivatives chain rule)
-        pol1 = RPCsinglepolynomial_array(p1_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol2 = RPCsinglepolynomial_array(p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol3 = RPCsinglepolynomial_array(p3_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol4 = RPCsinglepolynomial_array(p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol1x = RPCsinglepolynomialderivativeX_array(p1_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol1y = RPCsinglepolynomialderivativeY_array(p1_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol1z = RPCsinglepolynomialderivativeZ_array(p1_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol2x = RPCsinglepolynomialderivativeX_array(p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol2y = RPCsinglepolynomialderivativeY_array(p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol2z = RPCsinglepolynomialderivativeZ_array(p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol3x = RPCsinglepolynomialderivativeX_array(p3_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol3y = RPCsinglepolynomialderivativeY_array(p3_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol3z = RPCsinglepolynomialderivativeZ_array(p3_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol4x = RPCsinglepolynomialderivativeX_array(p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol4y = RPCsinglepolynomialderivativeY_array(p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        pol4z = RPCsinglepolynomialderivativeZ_array(p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol1 = RPCsinglepolynomial_matrix(p1_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol2 = RPCsinglepolynomial_matrix(p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol3 = RPCsinglepolynomial_matrix(p3_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol4 = RPCsinglepolynomial_matrix(p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol1x = RPCsinglepolynomialderivativeX_matrix(p1_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol1y = RPCsinglepolynomialderivativeY_matrix(p1_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol1z = RPCsinglepolynomialderivativeZ_matrix(p1_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol2x = RPCsinglepolynomialderivativeX_matrix(p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol2y = RPCsinglepolynomialderivativeY_matrix(p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol2z = RPCsinglepolynomialderivativeZ_matrix(p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol3x = RPCsinglepolynomialderivativeX_matrix(p3_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol3y = RPCsinglepolynomialderivativeY_matrix(p3_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol3z = RPCsinglepolynomialderivativeZ_matrix(p3_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol4x = RPCsinglepolynomialderivativeX_matrix(p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol4y = RPCsinglepolynomialderivativeY_matrix(p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        pol4z = RPCsinglepolynomialderivativeZ_matrix(p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
         pdXrow_1 = (pol1x*pol2-pol1*pol2x)/(pol2**2)
         pdYrow_1 = (pol1y*pol2-pol1*pol2y)/(pol2**2)
         pdZrow_1 = (pol1z*pol2-pol1*pol2z)/(pol2**2)
@@ -207,22 +207,22 @@ def triangulationRPC_array(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         pdYcol_1 = (pol3y*pol4-pol3*pol4y)/(pol4**2)
         pdZcol_1 = (pol3z*pol4-pol3*pol4z)/(pol4**2)
         # 2nd camera
-        pol1 = RPCsinglepolynomial_array(p1_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol2 = RPCsinglepolynomial_array(p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol3 = RPCsinglepolynomial_array(p3_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol4 = RPCsinglepolynomial_array(p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol1x = RPCsinglepolynomialderivativeX_array(p1_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol1y = RPCsinglepolynomialderivativeY_array(p1_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol1z = RPCsinglepolynomialderivativeZ_array(p1_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol2x = RPCsinglepolynomialderivativeX_array(p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol2y = RPCsinglepolynomialderivativeY_array(p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol2z = RPCsinglepolynomialderivativeZ_array(p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol3x = RPCsinglepolynomialderivativeX_array(p3_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol3y = RPCsinglepolynomialderivativeY_array(p3_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol3z = RPCsinglepolynomialderivativeZ_array(p3_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol4x = RPCsinglepolynomialderivativeX_array(p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol4y = RPCsinglepolynomialderivativeY_array(p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        pol4z = RPCsinglepolynomialderivativeZ_array(p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol1 = RPCsinglepolynomial_matrix(p1_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol2 = RPCsinglepolynomial_matrix(p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol3 = RPCsinglepolynomial_matrix(p3_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol4 = RPCsinglepolynomial_matrix(p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol1x = RPCsinglepolynomialderivativeX_matrix(p1_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol1y = RPCsinglepolynomialderivativeY_matrix(p1_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol1z = RPCsinglepolynomialderivativeZ_matrix(p1_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol2x = RPCsinglepolynomialderivativeX_matrix(p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol2y = RPCsinglepolynomialderivativeY_matrix(p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol2z = RPCsinglepolynomialderivativeZ_matrix(p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol3x = RPCsinglepolynomialderivativeX_matrix(p3_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol3y = RPCsinglepolynomialderivativeY_matrix(p3_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol3z = RPCsinglepolynomialderivativeZ_matrix(p3_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol4x = RPCsinglepolynomialderivativeX_matrix(p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol4y = RPCsinglepolynomialderivativeY_matrix(p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        pol4z = RPCsinglepolynomialderivativeZ_matrix(p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
         pdXrow_2 = (pol1x*pol2-pol1*pol2x)/(pol2**2)
         pdYrow_2 = (pol1y*pol2-pol1*pol2y)/(pol2**2)
         pdZrow_2 = (pol1z*pol2-pol1*pol2z)/(pol2**2)
@@ -230,15 +230,15 @@ def triangulationRPC_array(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         pdYcol_2 = (pol3y*pol4-pol3*pol4y)/(pol4**2)
         pdZcol_2 = (pol3z*pol4-pol3*pol4z)/(pol4**2)
         # build Jacobian A:
-        A = np.array([[pdXrow_1/Xs_1, pdYrow_1/Ys_1, pdZrow_1/Zs_1],
+        A = np.matrix([[pdXrow_1/Xs_1, pdYrow_1/Ys_1, pdZrow_1/Zs_1],
             [pdXcol_1/Xs_1, pdYcol_1/Ys_1, pdZcol_1/Zs_1],
             [pdXrow_2/Xs_2, pdYrow_2/Ys_2, pdZrow_2/Zs_2],
             [pdXcol_2/Xs_2, pdYcol_2/Ys_2, pdZcol_2/Zs_2]])
-        r1_hat = RPCforwardform_array(p1_1,p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        c1_hat = RPCforwardform_array(p3_1,p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        r2_hat = RPCforwardform_array(p1_2,p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        c2_hat = RPCforwardform_array(p3_2,p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        b = np.array([r1-r1_hat, c1-c1_hat, r2-r2_hat, c2-c2_hat])
+        r1_hat = RPCforwardform_matrix(p1_1,p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        c1_hat = RPCforwardform_matrix(p3_1,p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        r2_hat = RPCforwardform_matrix(p1_2,p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        c2_hat = RPCforwardform_matrix(p3_2,p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        b = np.matrix([r1-r1_hat, c1-c1_hat, r2-r2_hat, c2-c2_hat])
         # bb=b.*[scale_offsets_1(9)scale_offsets_1(10)scale_offsets_2(9)scale_offsets_2(10)]
         # solution 
         for i in range(npoints):
@@ -273,10 +273,10 @@ def triangulationRPC_array(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         # [Yuold_m,Xuold_m,utmzone] = deg2utm(Yuold, Xuold)
         # error_residual_m = sqrt((Xuold_m-Xunew_1_m)^2+(Yuold_m-Yunew_1_m)^2+DeltaZu^2)
         # error calculation
-        r1_est =  RPCforwardform_array(p1_1,p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        c1_est =  RPCforwardform_array(p3_1,p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
-        r2_est =  RPCforwardform_array(p1_2,p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        c2_est =  RPCforwardform_array(p3_2,p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        r1_est =  RPCforwardform_matrix(p1_1,p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        c1_est =  RPCforwardform_matrix(p3_1,p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        r2_est =  RPCforwardform_matrix(p1_2,p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
+        c2_est =  RPCforwardform_matrix(p3_2,p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
         # unnormalize        
         r1_est = RPCunnormalization(r1_est,rpc1.row_scale,rpc1.row_offset)
         c1_est = RPCunnormalization(c1_est,rpc1.col_scale,rpc1.col_offset)
