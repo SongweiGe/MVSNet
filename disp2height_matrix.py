@@ -7,7 +7,7 @@ import OpenEXR
 import numpy as np
 import matplotlib.pyplot as plt
 from rpcm.rpc_model import rpc_from_geotiff
-from triangulationRPC import triangulationRPC
+from triangulationRPC_matrix import triangulationRPC_array
 from scipy.interpolate import interp2d
 
 import pyproj
@@ -58,22 +58,13 @@ def apply_homography(h, x):
     #                    h[0] h[1] h[2]
     # The convention is: h[3] h[4] h[5]
     #                    h[6] h[7] h[8]
-    y = np.zeros(2, dtype=np.float)
+    y = np.zeros_like(x)
     z = h[6]*x[0] + h[7]*x[1] + h[8]
     # tmp = x[0]
+
     y[0] = (h[0]*x[0] + h[1]*x[1] + h[2]) / z
     y[1] = (h[3]*x[0]  + h[4]*x[1] + h[5]) / z
     return y
-
-
-# def apply_homography(h, x):
-#     #                    h[0] h[1] h[2]
-#     # The convention is: h[3] h[4] h[5]
-#     #                    h[6] h[7] h[8]
-#     y = np.zeros(2, dtype=np.float)
-#     y[0] = h[0]*x[0] + h[1]*x[1] + h[2]
-#     y[1] = h[3]*x[0]  + h[4]*x[1] + h[5]
-#     return y
 
 
 def invert_homography(i):
@@ -130,9 +121,6 @@ rpc_r_raw = rpc_from_geotiff(right_raw_file)
 left_bound = np.load(left_file+'.npy')
 right_bound = np.load(right_file+'.npy')
 
-# sanity check rpc
-# fn = '02APR15WV031000015APR02134718-P1BS-500497282050_01_P001_________AAE_0AAAAABPABJ0.NTF.tif'
-# rpc_ls = [rpc_from_geotiff(os.path.join('/disk/songwei/LockheedMartion/end2end/MVS/dem_2_%d/cropped_images'%i, fn)) for i in range(1,5)]
 data_left = open_gtiff(left_stereo_file)
 # data_left[data_left<0] = 0
 data_right = open_gtiff(right_stereo_file)
@@ -145,105 +133,27 @@ data_left_un = open_gtiff(left_file)
 data_right_un = open_gtiff(right_file)
 # scipy.misc.imsave('right_un.png', data_right_un)
 
-# # y1_raw, x1_raw = apply_homography(h_left_inv, [y1, x1])
-# x2_raw, y2_raw = apply_homography(h_left_inv, [300, 500])
-# cv2.perspectiveTransform(np.float32([[[300, 500]]]), h_left_inv.reshape((3,3)))
-# scipy.misc.imsave('left_raw_debug.png', data_left_un[int(y2_raw)-100:int(y2_raw)+100, int(x2_raw)-100:int(x2_raw)+100])
-# # scipy.misc.imsave('left_raw_debug.png', data_left_un[int(y1_raw)-150:int(y1_raw)+150, int(x1_raw)-150:int(x1_raw)+150])
-
-# # y1_raw, x1_raw = apply_homography(h_right_inv, [y1, x1])
-# x2_raw, y2_raw  = apply_homography(h_right_inv, [300, 500-disparity_map[0, 300, 500]])
-# scipy.misc.imsave('right_raw_debug.png', data_right_un[int(y2_raw)-100:int(y2_raw)+100, int(x2_raw)-100:int(x2_raw)+100])
-# # scipy.misc.imsave('right_raw_debug.png', data_right_un[int(y1_raw)-150:int(y1_raw)+150, int(x1_raw)-150:int(x1_raw)+150])
-
-# img_rec_left = cv2.warpPerspective(data_left_un, h_left.reshape((3,3)), (data_right.shape[1],data_right.shape[0]))
-# scipy.misc.imsave('left_recti.png',img_rec_left)
-# img_unrec_left = cv2.warpPerspective(img_rec_left, h_left_inv.reshape((3,3)), (data_left_un.shape[1],data_left_un.shape[0]))
-# scipy.misc.imsave('left_recti_unrec.png',img_unrec_left)
-# aaa = np.matmul(h_left_inv.reshape((3,3)), np.array([y2, x2, 1]))
-# np.matmul(h_left_inv.reshape((3,3)), aaa)
-
-# img_rec_right = cv2.warpPerspective(data_right_un, h_right.reshape((3,3)), (data_right.shape[1],data_right.shape[0]))
-# scipy.misc.imsave('right_recti.png',img_rec_right)
-# img_unrec_right = cv2.warpPerspective(img_rec_right, h_right_inv.reshape((3,3)), (data_right_un.shape[1],data_right_un.shape[0]))
-# scipy.misc.imsave('right_recti_unrec.png',img_unrec_right)
-
-# xs = []
-# ys = []
-# for i in range(data_right.shape[0]):
-#     for j in range(data_right.shape[1]):
-#         if data_right[i, j] == 0:
-#             continue
-#         x, y = apply_homography(h_right_inv, [j, i])
-#         xs.append(x)
-#         ys.append(y)
-
-# np.max(xs), np.min(xs)
-# np.max(ys), np.min(ys)
-
-# scipy.misc.imsave('disparity_map.png',disparity_map[0, :, :])
-# data_left_raw = open_gtiff(left_raw_file)
-# data_right_raw = open_gtiff(right_raw_file)
-# (data_left_un[y1:y2, x1:x2] == data_left_raw[y1+left_bound[1]:y2+left_bound[1], x1+left_bound[0]:x2+left_bound[0]]).all()
-
-
-###### debug rpc #######
-# rpc_param_1 = np.loadtxt('rpc1.out', delimiter=',')
-# rpc_param_2 = np.loadtxt('rpc2.out', delimiter=',')
-# globalposc1 = rpc_param_1[95-1];
-# globalposr1 = rpc_param_1[96-1];
-# globalposc2 = rpc_param_2[95-1];
-# globalposr2 = rpc_param_2[96-1];        
-# p1_1=rpc_param_1[11-1:30];p2_1=rpc_param_1[31-1:50];
-# p3_1=rpc_param_1[51-1:70];p4_1=rpc_param_1[71-1:90];
-# p1_2=rpc_param_2[11-1:30];p2_2=rpc_param_2[31-1:50];
-# p3_2=rpc_param_2[51-1:70];p4_2=rpc_param_2[71-1:90];
-# scale_offsets_1 = [rpc_param_1[8-1], rpc_param_1[3-1],
-#     rpc_param_1[9-1], rpc_param_1[4-1], rpc_param_1[10-1], rpc_param_1[5-1],
-#     rpc_param_1[1-1], rpc_param_1[2-1], rpc_param_1[6-1], rpc_param_1[7-1]];
-# scale_offsets_2 = [rpc_param_2[8-1], rpc_param_2[3-1],
-#     rpc_param_2[9-1], rpc_param_2[4-1], rpc_param_2[10-1], rpc_param_2[5-1],
-#     rpc_param_2[1-1], rpc_param_2[2-1], rpc_param_2[6-1], rpc_param_2[7-1]];
-# triangulationRPC(p1_1,p2_1,p3_1,p4_1,p1_2,p2_2,p3_2,p4_2,2.1279e+04,1.7762e+04,2.0001e+04,1.7510e+04,scale_offsets_1,scale_offsets_2, verbose=True)
-# items_l = [rpc_l_raw.lon_scale, rpc_l_raw.lon_offset, rpc_l_raw.lat_scale, rpc_l_raw.lat_offset, rpc_l_raw.alt_scale, rpc_l_raw.alt_offset, rpc_l_raw.row_scale, rpc_l_raw.row_offset, rpc_l_raw.col_scale, rpc_l_raw.col_offset]
-# items_l += rpc_l_raw.row_num + rpc_l_raw.row_den + rpc_l_raw.col_num + rpc_l_raw.col_den
-# items_l += [0, 0, 0, 0, left_bound[1], left_bound[0]]
-# with open('rpc1.txt', 'w') as fw: fw.write(', '.join([str(item) for item in items_l]))
-
-# items_r = [rpc_r_raw.lon_scale, rpc_r_raw.lon_offset, rpc_r_raw.lat_scale, rpc_r_raw.lat_offset, rpc_r_raw.alt_scale, rpc_r_raw.alt_offset, rpc_r_raw.row_scale, rpc_r_raw.row_offset, rpc_r_raw.col_scale, rpc_r_raw.col_offset]
-# items_r += rpc_r_raw.row_num + rpc_r_raw.row_den + rpc_r_raw.col_num + rpc_r_raw.col_den
-# items_r += [0, 0, 0, 0, right_bound[1], right_bound[0]]
-# with open('rpc2.txt', 'w') as fw: fw.write(', '.join([str(item) for item in items_r]))
-
-# import ipdb;ipdb.set_trace()
-# height_map = np.zeros((y2-y1, x2-x1))
 nrow, ncol = data_left.shape
 height_map = np.zeros([3, data_left.shape[0], data_left.shape[1]])
 # f_row = interp2d(np.arange(disparity_map.shape[2]), np.arange(disparity_map.shape[1]), disparity_map[1, :, :])
 # f_col = interp2d(np.arange(disparity_map.shape[2]), np.arange(disparity_map.shape[1]), disparity_map[0, :, :])
-begin_time = time.time()
-for row in range(nrow):
-    for col in range(ncol):
-        # if disparity_map[2, row, col] == 0:
-        #     continue
-        # left_col_re, left_row_re = apply_homography(h_left, [col, row])
-        # disp_col = f_col(left_row_re, left_col_re)
-        # disp_row = f_row(left_row_re, left_col_re)
-        left_col_un, left_row_un = apply_homography(h_left_inv, [col, row])
-        right_col_un, right_row_un = apply_homography(h_right_inv, [col+disparity_map[0, row, col], row+disparity_map[1, row, col]])
-        # right_col_un, right_row_un = apply_homography(h_right_inv, [left_col_re+disp_col, left_row_re+disp_row])
-        # scipy.misc.imsave('left_raw_debug.png', data_left_un[int(left_col_un)-100:int(left_col_un)+100, int(left_row_un)-100:int(left_row_un)+100])
-        # scipy.misc.imsave('right_raw_debug.png', data_right_un[int(right_col_un)-100:int(right_col_un)+100, int(right_row_un)-100:int(right_row_un)+100])
-        # triangulationRPC(left_row_un+left_bound[1], left_col_un+left_bound[0], right_row_un+right_bound[1], right_col_un+right_bound[0], rpc_l_raw, rpc_r_raw, verbose=True)
-        import ipdb;ipdb.set_trace()
-        Xu,Yu,Zu,error2d,error3d = triangulationRPC(left_row_un+left_bound[1], left_col_un+left_bound[0], right_row_un+right_bound[1], right_col_un+right_bound[0], rpc_l_raw, rpc_r_raw, verbose=False)
-        # Xu,Yu,Zu,error2d,error3d = triangulationRPC(row+left_bound[1], col+left_bound[0], right_row_un+right_bound[1], right_col_un+right_bound[0], rpc_l_raw, rpc_r_raw, verbose=False)
-        # Xu,Yu,Zu,error2d,error3d = triangulationRPC(left_row_un, left_col_un, right_row_un, right_col_un, rpc_l, rpc_r, verbose=True)
-        # triangulationRPC(row, col, row, col, rpc_l, rpc_r, verbose=True)
-        height_map[0, row, col] = Xu
-        height_map[1, row, col] = Yu
-        height_map[2, row, col] = Zu
+cu1, ru1 = np.meshgrid(np.arange(ncol, dtype=np.float32), np.arange(nrow, dtype=np.float32))
 
+ru2 = ru1 + disparity_map[1, :, :]
+cu2 = cu1 + disparity_map[0, :, :]
+
+cu1, ru1 = apply_homography(h_left_inv, [cu1, ru1])
+cu2, ru2 = apply_homography(h_right_inv, [cu2, ru2])
+# import ipdb;ipdb.set_trace()
+ru1 = (ru1+left_bound[1]).reshape(-1)
+cu1 = (cu1+left_bound[0]).reshape(-1)
+ru2 = (ru2+right_bound[1]).reshape(-1)
+cu2 = (cu2+right_bound[0]).reshape(-1)
+begin_time = time.time()
+Xu,Yu,Zu,error2d,error3d =triangulationRPC_array(ru1, cu1, ru2, cu2, rpc_l_raw, rpc_r_raw, verbose=False)
+height_map[0, :, :] = Xu.reshape(height_map.shape[1], height_map.shape[2])
+height_map[1, :, :] = Yu.reshape(height_map.shape[1], height_map.shape[2])
+height_map[2, :, :] = Zu.reshape(height_map.shape[1], height_map.shape[2])
 
 print('Triangulation took %.4f seconds'%(time.time()-begin_time))
 # row = y1+300
@@ -271,11 +181,11 @@ ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
 int_im = griddata((iy.reshape(-1), ix.reshape(-1)), height_map[2, :, :].reshape(-1), (yy, xx))
 int_im = geo_utils.fill_holes(int_im)
 
-# data = int_im
-# mask = np.isnan(data)
-# data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
+data = int_im
+mask = np.isnan(data)
+data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
 fire_palette = scipy.misc.imread('image/fire_palette.png')[0][:, 0:3]
-color_map = eval_util.getColorMapFromPalette(int_im[y1:y2, x1:x2], fire_palette)
+color_map = eval_util.getColorMapFromPalette(data[y1:y2, x1:x2], fire_palette)
 scipy.misc.imsave('final.png', color_map)
 
 
