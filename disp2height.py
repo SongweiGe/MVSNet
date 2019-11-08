@@ -235,7 +235,7 @@ for row in range(nrow):
         # scipy.misc.imsave('left_raw_debug.png', data_left_un[int(left_col_un)-100:int(left_col_un)+100, int(left_row_un)-100:int(left_row_un)+100])
         # scipy.misc.imsave('right_raw_debug.png', data_right_un[int(right_col_un)-100:int(right_col_un)+100, int(right_row_un)-100:int(right_row_un)+100])
         # triangulationRPC(left_row_un+left_bound[1], left_col_un+left_bound[0], right_row_un+right_bound[1], right_col_un+right_bound[0], rpc_l_raw, rpc_r_raw, verbose=True)
-        import ipdb;ipdb.set_trace()
+        # import ipdb;ipdb.set_trace()
         Xu,Yu,Zu,error2d,error3d = triangulationRPC(left_row_un+left_bound[1], left_col_un+left_bound[0], right_row_un+right_bound[1], right_col_un+right_bound[0], rpc_l_raw, rpc_r_raw, verbose=False)
         # Xu,Yu,Zu,error2d,error3d = triangulationRPC(row+left_bound[1], col+left_bound[0], right_row_un+right_bound[1], right_col_un+right_bound[0], rpc_l_raw, rpc_r_raw, verbose=False)
         # Xu,Yu,Zu,error2d,error3d = triangulationRPC(left_row_un, left_col_un, right_row_un, right_col_un, rpc_l, rpc_r, verbose=True)

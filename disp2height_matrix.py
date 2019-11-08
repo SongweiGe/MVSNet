@@ -137,7 +137,7 @@ nrow, ncol = data_left.shape
 height_map = np.zeros([3, data_left.shape[0], data_left.shape[1]])
 # f_row = interp2d(np.arange(disparity_map.shape[2]), np.arange(disparity_map.shape[1]), disparity_map[1, :, :])
 # f_col = interp2d(np.arange(disparity_map.shape[2]), np.arange(disparity_map.shape[1]), disparity_map[0, :, :])
-cu1, ru1 = np.meshgrid(np.arange(ncol, dtype=np.float32), np.arange(nrow, dtype=np.float32))
+cu1, ru1 = np.meshgrid(np.arange(ncol, dtype=np.float64), np.arange(nrow, dtype=np.float64))
 
 ru2 = ru1 + disparity_map[1, :, :]
 cu2 = cu1 + disparity_map[0, :, :]
@@ -186,16 +186,16 @@ mask = np.isnan(data)
 data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
 fire_palette = scipy.misc.imread('image/fire_palette.png')[0][:, 0:3]
 color_map = eval_util.getColorMapFromPalette(data[y1:y2, x1:x2], fire_palette)
-scipy.misc.imsave('final.png', color_map)
+scipy.misc.imsave('final_matrix.png', color_map)
 
 
 amp_path = os.path.join(tmp_path, 'FF-%d.npy'%pair_id)
 amp_data = np.load(amp_path)
 color_map = eval_util.getColorMapFromPalette(amp_data[y1:y2, x1:x2], fire_palette)
-scipy.misc.imsave('final_amp.png', color_map)
+scipy.misc.imsave('final_amp_matrix.png', color_map)
 
 amp_path = os.path.join(stereo_path, 'out-PC.tif')
 amp_data = open_gtiff(amp_path)
 
 color_map = eval_util.getColorMapFromPalette(height_map[2, :, :], fire_palette)
-scipy.misc.imsave('height_map.png', color_map)
+scipy.misc.imsave('height_map_matrix.png', color_map)

@@ -250,8 +250,8 @@ def triangulationRPC(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         # solution        
         LSsol=np.matmul(np.matmul(np.linalg.inv(np.matmul(A.T, A)), A.T),b)
         # sanity check np.matmul(A, LSsol)-b
-        # if it == 4:
-        #     import ipdb;ipdb.set_trace()
+        if it == 0:
+            import ipdb;ipdb.set_trace()
         DeltaXu=LSsol[0]
         DeltaYu=LSsol[1]
         DeltaZu=LSsol[2]

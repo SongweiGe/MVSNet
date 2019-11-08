@@ -64,14 +64,14 @@ def RPCforwardform_array(p,q,X,Y,Z):
 def triangulationRPC_array(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     npoints = len(ru1)
     #  setup Parameters based on the notation
-    p1_1 = np.array(rpc1.row_num)
-    p2_1 = np.array(rpc1.row_den)
-    p3_1 = np.array(rpc1.col_num)
-    p4_1 = np.array(rpc1.col_den)
-    p1_2 = np.array(rpc2.row_num)
-    p2_2 = np.array(rpc2.row_den)
-    p3_2 = np.array(rpc2.col_num)
-    p4_2 = np.array(rpc2.col_den)
+    p1_1 = np.array(rpc1.row_num, dtype=np.float64)
+    p2_1 = np.array(rpc1.row_den, dtype=np.float64)
+    p3_1 = np.array(rpc1.col_num, dtype=np.float64)
+    p4_1 = np.array(rpc1.col_den, dtype=np.float64)
+    p1_2 = np.array(rpc2.row_num, dtype=np.float64)
+    p2_2 = np.array(rpc2.row_den, dtype=np.float64)
+    p3_2 = np.array(rpc2.col_num, dtype=np.float64)
+    p4_2 = np.array(rpc2.col_den, dtype=np.float64)
 
     # r1, c1, r2, c2
 
@@ -156,12 +156,12 @@ def triangulationRPC_array(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     NormXold=0
     NormYold=0
     NormZold=0
-    Xunew_1=DeltaXu
-    Yunew_1=DeltaYu
-    Zunew_1=DeltaZu
-    Xunew_2=DeltaXu
-    Yunew_2=DeltaYu
-    Zunew_2=DeltaZu
+    Xunew_1=np.copy(DeltaXu)
+    Yunew_1=np.copy(DeltaYu)
+    Zunew_1=np.copy(DeltaZu)
+    Xunew_2=np.copy(DeltaXu)
+    Yunew_2=np.copy(DeltaYu)
+    Zunew_2=np.copy(DeltaZu)
     NormupdateX_1=RPCnormalization(DeltaXu,Xo_1,Xs_1)    
     NormupdateY_1=RPCnormalization(DeltaYu,Yo_1,Ys_1)
     NormupdateZ_1=RPCnormalization(DeltaZu,Zo_1,Zs_1)
@@ -178,6 +178,7 @@ def triangulationRPC_array(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     cnt=0
     # import ipdb;ipdb.set_trace()
     for it in range(Niter):
+        # import ipdb;ipdb.set_trace()
         # system eqs
         # partial derivatives
         # 1st camera
@@ -241,12 +242,13 @@ def triangulationRPC_array(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         # bb=b.*[scale_offsets_1(9)scale_offsets_1(10)scale_offsets_2(9)scale_offsets_2(10)]
         # solution 
         for i in range(npoints):
+            # import ipdb;ipdb.set_trace()
             LSsol= np.matmul(np.matmul(np.linalg.inv(np.matmul(A[:, :, i].T, A[:, :, i])), A[:, :, i].T),b[:, i])
-            DeltaXu[i]=LSsol[2]
+            DeltaXu[i]=LSsol[0]
             DeltaYu[i]=LSsol[1]
-            DeltaZu[i]=LSsol[0]
+            DeltaZu[i]=LSsol[2]
         # sanity check np.matmul(A, LSsol)-b
-        # if it == 4:
+        # if it == 1:
         #     import ipdb;ipdb.set_trace()
         # update unnormalized
         Xuold = Xunew_1
