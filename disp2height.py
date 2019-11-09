@@ -215,7 +215,7 @@ data_right_un = open_gtiff(right_file)
 # items_r += [0, 0, 0, 0, right_bound[1], right_bound[0]]
 # with open('rpc2.txt', 'w') as fw: fw.write(', '.join([str(item) for item in items_r]))
 
-# import ipdb;ipdb.set_trace()
+import ipdb;ipdb.set_trace()
 # height_map = np.zeros((y2-y1, x2-x1))
 nrow, ncol = data_left.shape
 height_map = np.zeros([3, data_left.shape[0], data_left.shape[1]])

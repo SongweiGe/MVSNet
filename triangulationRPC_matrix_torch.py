@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 from rpcm.rpc_model import rpc_from_geotiff
 
@@ -12,49 +13,49 @@ def RPCunnormalization(normdata,offset,scale):
 def RPCsinglepolynomialderivativeX_matrix(p,X,Y,Z):
     npoints = len(X)
     # monomial=[1 X Y Z X*Y X*Z Y*Z X**2 Y**2 Z**2 X*Y*Z X**3 X*Y**2 X*Z**2 X**2*Y Y**3 Y*Z**2 X**2*Z Y**2*Z Z**3]
-    monomial = np.array([np.zeros(npoints), np.ones(npoints), np.zeros(npoints), np.zeros(npoints), Y, Z, np.zeros(npoints), 
-                2*X, np.zeros(npoints), np.zeros(npoints), Y*Z, 3*X**2, Y**2, Z**2, 2*X*Y, np.zeros(npoints), 
-                np.zeros(npoints), 2*X*Z, np.zeros(npoints), np.zeros(npoints)]) # 20 x npoints
-    sol = np.sum(p.reshape(-1, 1)*monomial, 0)
+    monomial = torch.cuda.DoubleTensor(np.array([torch.zeros(npoints), torch.ones(npoints), torch.zeros(npoints), torch.zeros(npoints), Y, Z, torch.zeros(npoints), 
+                2*X, torch.zeros(npoints), torch.zeros(npoints), Y*Z, 3*X**2, Y**2, Z**2, 2*X*Y, torch.zeros(npoints), 
+                torch.zeros(npoints), 2*X*Z, torch.zeros(npoints), torch.zeros(npoints)])) # 20 x npoints
+    sol = torch.sum(p.reshape(-1, 1)*monomial, 0)
     return sol
 
 
 def RPCsinglepolynomialderivativeY_matrix(p,X,Y,Z):
     npoints = len(X)
     # monomial=[1 X Y Z X*Y X*Z Y*Z X**2 Y**2 Z**2 X*Y*Z X**3 X*Y**2 X*Z**2 X**2*Y Y**3 Y*Z**2 X**2*Z Y**2*Z Z**3]
-    monomial = np.array([np.zeros(npoints), np.zeros(npoints), np.ones(npoints), np.zeros(npoints), X, np.zeros(npoints), Z, 
-            np.zeros(npoints), 2*Y, np.zeros(npoints), X*Z, np.zeros(npoints), X*2*Y, np.zeros(npoints), 
-            X**2, 3*Y**2, Z**2, np.zeros(npoints), 2*Y*Z, np.zeros(npoints)])
-    sol = np.sum(p.reshape(-1, 1)*monomial, 0)
+    monomial = torch.cuda.DoubleTensor(np.array([torch.zeros(npoints), torch.zeros(npoints), torch.ones(npoints), torch.zeros(npoints), X, torch.zeros(npoints), Z, 
+            torch.zeros(npoints), 2*Y, torch.zeros(npoints), X*Z, torch.zeros(npoints), X*2*Y, torch.zeros(npoints), 
+            X**2, 3*Y**2, Z**2, torch.zeros(npoints), 2*Y*Z, torch.zeros(npoints)]))
+    sol = torch.sum(p.reshape(-1, 1)*monomial, 0)
     return sol
    
 
 def RPCsinglepolynomialderivativeZ_matrix(p,X,Y,Z):
     npoints = len(X)
     # monomial=[1 X Y Z X*Y X*Z Y*Z X**2 Y**2 Z**2 X*Y*Z X**3 X*Y**2 X*Z**2 X**2*Y Y**3 Y*Z**2 X**2*Z Y**2*Z Z**3]
-    monomial = np.array([np.zeros(npoints), np.zeros(npoints), np.zeros(npoints), np.ones(npoints), np.zeros(npoints), X, Y, 
-            np.zeros(npoints), np.zeros(npoints), 2*Z, X*Y, np.zeros(npoints), np.zeros(npoints), X*2*Z, 
-            np.zeros(npoints), np.zeros(npoints), Y*2*Z, X**2, Y**2, 3*Z**2])
-    sol = np.sum(p.reshape(-1, 1)*monomial, 0)
+    monomial = torch.cuda.DoubleTensor(np.array([torch.zeros(npoints), torch.zeros(npoints), torch.zeros(npoints), torch.ones(npoints), torch.zeros(npoints), X, Y, 
+            torch.zeros(npoints), torch.zeros(npoints), 2*Z, X*Y, torch.zeros(npoints), torch.zeros(npoints), X*2*Z, 
+            torch.zeros(npoints), torch.zeros(npoints), Y*2*Z, X**2, Y**2, 3*Z**2]))
+    sol = torch.sum(p.reshape(-1, 1)*monomial, 0)
     return sol 
 
 
 def RPCsinglepolynomial_matrix(p,X,Y,Z):
     npoints = len(X)
-    monomial = np.array([np.ones(npoints), X, Y, Z, X*Y, X*Z, Y*Z, X**2, Y**2, Z**2, X*Y*Z, 
-                X**3, X*Y**2, X*Z**2, X**2*Y, Y**3, Y*Z**2, X**2*Z, Y**2*Z, Z**3])
-    sol = np.sum(p.reshape(-1, 1)*monomial, 0)
+    monomial = torch.cuda.DoubleTensor(np.array([torch.ones(npoints), X, Y, Z, X*Y, X*Z, Y*Z, X**2, Y**2, Z**2, X*Y*Z, 
+                X**3, X*Y**2, X*Z**2, X**2*Y, Y**3, Y*Z**2, X**2*Z, Y**2*Z, Z**3]))
+    sol = torch.sum(p.reshape(-1, 1)*monomial, 0)
     return sol
 
 
 def RPCforwardform_matrix(p,q,X,Y,Z):
     npoints = len(X)
-    # num = np.zeros((npoints,20))
-    # den = np.zeros((npoints,20))
-    monomial = np.array([np.ones(npoints), X, Y, Z, X*Y, X*Z, Y*Z, X**2, Y**2, Z**2, X*Y*Z, 
-                X**3, X*Y**2, X*Z**2, X**2*Y, Y**3, Y*Z**2, X**2*Z, Y**2*Z, Z**3])
-    num = np.sum(p.reshape(-1, 1)*monomial, 0)
-    den = np.sum(q.reshape(-1, 1)*monomial, 0)
+    # num = torch.zeros((npoints,20))
+    # den = torch.zeros((npoints,20))
+    monomial = torch.cuda.DoubleTensor(np.array([torch.ones(npoints), X, Y, Z, X*Y, X*Z, Y*Z, X**2, Y**2, Z**2, X*Y*Z, 
+                X**3, X*Y**2, X*Z**2, X**2*Y, Y**3, Y*Z**2, X**2*Z, Y**2*Z, Z**3]))
+    num = torch.sum(p.reshape(-1, 1)*monomial, 0)
+    den = torch.sum(q.reshape(-1, 1)*monomial, 0)
     if (den == 0).all():
         den = 1
     pixel_coordinate=num/den
@@ -64,14 +65,14 @@ def RPCforwardform_matrix(p,q,X,Y,Z):
 def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     npoints = len(ru1)
     #  setup Parameters based on the notation
-    p1_1 = np.array(rpc1.row_num, dtype=np.float64)
-    p2_1 = np.array(rpc1.row_den, dtype=np.float64)
-    p3_1 = np.array(rpc1.col_num, dtype=np.float64)
-    p4_1 = np.array(rpc1.col_den, dtype=np.float64)
-    p1_2 = np.array(rpc2.row_num, dtype=np.float64)
-    p2_2 = np.array(rpc2.row_den, dtype=np.float64)
-    p3_2 = np.array(rpc2.col_num, dtype=np.float64)
-    p4_2 = np.array(rpc2.col_den, dtype=np.float64)
+    p1_1 = torch.cuda.DoubleTensor(np.array(rpc1.row_num, dtype=np.float64))
+    p2_1 = torch.cuda.DoubleTensor(np.array(rpc1.row_den, dtype=np.float64))
+    p3_1 = torch.cuda.DoubleTensor(np.array(rpc1.col_num, dtype=np.float64))
+    p4_1 = torch.cuda.DoubleTensor(np.array(rpc1.col_den, dtype=np.float64))
+    p1_2 = torch.cuda.DoubleTensor(np.array(rpc2.row_num, dtype=np.float64))
+    p2_2 = torch.cuda.DoubleTensor(np.array(rpc2.row_den, dtype=np.float64))
+    p3_2 = torch.cuda.DoubleTensor(np.array(rpc2.col_num, dtype=np.float64))
+    p4_2 = torch.cuda.DoubleTensor(np.array(rpc2.col_den, dtype=np.float64))
 
     # r1, c1, r2, c2
 
@@ -132,23 +133,29 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     d2_2=p4_2[2]*Zs_2*Xs_2
     d3_2=p4_2[1]*Zs_2*Ys_2
     # ITERATION 1
-    A=np.array([[a1_1-r1*b1_1, a2_1-r1*b2_1, a3_1-r1*b3_1],
-        [c1_1-c1*d1_1, c2_1-c1*d2_1, c3_1-c1*d3_1],
-        [a1_2-r2*b1_2, a2_2-r2*b2_2, a3_2-r2*b3_2],
-        [c1_2-c2*d1_2, c2_2-c2*d2_2, c3_2-c2*d3_2]]) # 4 x 4 x npoints
-    b=np.array([r1*b0_1-a0_1,c1*d0_1-c0_1,r2*b0_2-a0_2,c2*d0_2-c0_2]) # 4 x npoints
-    DeltaXu = np.zeros(npoints)
-    DeltaYu = np.zeros(npoints)
-    DeltaZu = np.zeros(npoints)
-    for i in range(npoints):
-        LSsol= np.matmul(np.matmul(np.linalg.inv(np.matmul(A[:, :, i].T, A[:, :, i])), A[:, :, i].T),b[:, i])
-        # import ipdb;ipdb.set_trace()
-        DeltaXu[i]=LSsol[2]
-        DeltaYu[i]=LSsol[1]
-        DeltaZu[i]=LSsol[0]
 
-    # np.linalg.lstsq(A, b)
-    # np.matmul(A, LSsol)-b
+    A=torch.stack([torch.stack([a1_1-r1*b1_1, a2_1-r1*b2_1, a3_1-r1*b3_1]),
+        torch.stack([c1_1-c1*d1_1, c2_1-c1*d2_1, c3_1-c1*d3_1]),
+        torch.stack([a1_2-r2*b1_2, a2_2-r2*b2_2, a3_2-r2*b3_2]),
+        torch.stack([c1_2-c2*d1_2, c2_2-c2*d2_2, c3_2-c2*d3_2])]).permute(2, 0, 1) # 4 x 4 x npoints
+    b=torch.stack([r1*b0_1-a0_1,c1*d0_1-c0_1,r2*b0_2-a0_2,c2*d0_2-c0_2]).view(-1, 4, 1) # 4 x npoints
+    DeltaXu = torch.zeros(npoints)
+    DeltaYu = torch.zeros(npoints)
+    DeltaZu = torch.zeros(npoints)
+    # import ipdb;ipdb.set_trace()
+    for i in range(npoints//30000):
+        print(i)
+        id_min = i*30000
+        id_max = np.min([(i+1)*30000, npoints])
+        A_temp = A[id_min:id_max]
+        b_temp = b[id_min:id_max]
+        LSsol= torch.matmul(torch.matmul(torch.inverse(torch.matmul(A_temp.transpose(2, 1), A_temp)), A_temp.transpose(2, 1)),b_temp)
+        DeltaXu[id_min:id_max]=LSsol[:, 2, 0]
+        DeltaYu[id_min:id_max]=LSsol[:, 1, 0]
+        DeltaZu[id_min:id_max]=LSsol[:, 0, 0]
+
+    # torch.linalg.lstsq(A, b)
+    # torch.matmul(A, LSsol)-b
 
     # DeltaZu=10
     # next iterations
@@ -156,12 +163,12 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     NormXold=0
     NormYold=0
     NormZold=0
-    Xunew_1=np.copy(DeltaXu)
-    Yunew_1=np.copy(DeltaYu)
-    Zunew_1=np.copy(DeltaZu)
-    Xunew_2=np.copy(DeltaXu)
-    Yunew_2=np.copy(DeltaYu)
-    Zunew_2=np.copy(DeltaZu)
+    Xunew_1=DeltaXu
+    Yunew_1=DeltaYu
+    Zunew_1=DeltaZu
+    Xunew_2=DeltaXu
+    Yunew_2=DeltaYu
+    Zunew_2=DeltaZu
     NormupdateX_1=RPCnormalization(DeltaXu,Xo_1,Xs_1)    
     NormupdateY_1=RPCnormalization(DeltaYu,Yo_1,Ys_1)
     NormupdateZ_1=RPCnormalization(DeltaZu,Zo_1,Zs_1)
@@ -230,24 +237,24 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         pdYcol_2 = (pol3y*pol4-pol3*pol4y)/(pol4**2)
         pdZcol_2 = (pol3z*pol4-pol3*pol4z)/(pol4**2)
         # build Jacobian A:
-        A = np.array([[pdXrow_1/Xs_1, pdYrow_1/Ys_1, pdZrow_1/Zs_1],
-            [pdXcol_1/Xs_1, pdYcol_1/Ys_1, pdZcol_1/Zs_1],
-            [pdXrow_2/Xs_2, pdYrow_2/Ys_2, pdZrow_2/Zs_2],
-            [pdXcol_2/Xs_2, pdYcol_2/Ys_2, pdZcol_2/Zs_2]])
+        A = torch.stack([torch.stack([pdXrow_1/Xs_1, pdYrow_1/Ys_1, pdZrow_1/Zs_1]),
+            torch.stack([pdXcol_1/Xs_1, pdYcol_1/Ys_1, pdZcol_1/Zs_1]),
+            torch.stack([pdXrow_2/Xs_2, pdYrow_2/Ys_2, pdZrow_2/Zs_2]),
+            torch.stack([pdXcol_2/Xs_2, pdYcol_2/Ys_2, pdZcol_2/Zs_2])])
         r1_hat = RPCforwardform_matrix(p1_1,p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
         c1_hat = RPCforwardform_matrix(p3_1,p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
         r2_hat = RPCforwardform_matrix(p1_2,p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
         c2_hat = RPCforwardform_matrix(p3_2,p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        b = np.array([r1-r1_hat, c1-c1_hat, r2-r2_hat, c2-c2_hat])
+        b = torch.stack([r1-r1_hat, c1-c1_hat, r2-r2_hat, c2-c2_hat])
         # bb=b.*[scale_offsets_1(9)scale_offsets_1(10)scale_offsets_2(9)scale_offsets_2(10)]
         # solution 
         for i in range(npoints):
             # import ipdb;ipdb.set_trace()
-            LSsol= np.matmul(np.matmul(np.linalg.inv(np.matmul(A[:, :, i].T, A[:, :, i])), A[:, :, i].T),b[:, i])
+            LSsol= torch.matmul(torch.matmul(torch.inverse(torch.matmul(A[:, :, i].transpose(1,0), A[:, :, i])), A[:, :, i].transpose(1,0)),b[:, i])
             DeltaXu[i]=LSsol[0]
             DeltaYu[i]=LSsol[1]
             DeltaZu[i]=LSsol[2]
-        # sanity check np.matmul(A, LSsol)-b
+        # sanity check torch.matmul(A, LSsol)-b
         # if it == 1:
         #     import ipdb;ipdb.set_trace()
         # update unnormalized
@@ -260,7 +267,7 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         Xunew_2 = Xunew_2 + DeltaXu
         Yunew_2 = Yunew_2 + DeltaYu
         Zunew_2 = Zunew_2 + DeltaZu
-        error_residual = np.mean(np.sqrt(DeltaXu**2+DeltaYu**2+DeltaZu**2))        
+        error_residual = torch.mean(torch.sqrt(DeltaXu**2+DeltaYu**2+DeltaZu**2))        
         # normalize updated coordinates
         NormXnew_1=RPCnormalization(Xunew_1,Xo_1,Xs_1)
         NormYnew_1=RPCnormalization(Yunew_1,Yo_1,Ys_1)
@@ -286,8 +293,8 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         # c1_est = RPCunnormalization(c1_est,scale_offsets_1[8-1],scale_offsets_1[10-1])
         # r2_est = RPCunnormalization(r2_est,scale_offsets_2[7-1],scale_offsets_2[9-1])
         # c2_est = RPCunnormalization(c2_est,scale_offsets_2[8-1],scale_offsets_2[10-1])
-        error_pixel_residual_1 = np.mean(np.sqrt((ru1-r1_est)**2+(cu1-c1_est)**2))
-        error_pixel_residual_2 = np.mean(np.sqrt((ru2-r2_est)**2+(cu2-c2_est)**2))
+        error_pixel_residual_1 = torch.mean(torch.sqrt((ru1-r1_est)**2+(cu1-c1_est)**2))
+        error_pixel_residual_2 = torch.mean(torch.sqrt((ru2-r2_est)**2+(cu2-c2_est)**2))
         if verbose:
             print('previous 3D point:%.10f,%.10f,%.10f updatedCAM1:%.10f,%.10f,%.10f updatedCAM2:%.10f,%.10f,%.10f \n'%
                 (Xuold,Yuold,Zuold,Xunew_1,Yunew_1,Zunew_1,Xunew_2,Yunew_2,Zunew_2))

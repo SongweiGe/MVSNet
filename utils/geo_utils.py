@@ -1,6 +1,17 @@
+import gdal
 import pyproj
 import numpy as np
 from fastkml import kml
+
+def open_gtiff(path, dtype=None):
+    ds = gdal.Open(path)
+    if dtype is None:
+        im_np = np.array(ds.ReadAsArray())
+        return im_np.copy()
+    else:
+        im_np = np.array(ds.ReadAsArray(), dtype=dtype)
+        return im_np.copy()
+
 
 def get_bounds_and_imsize_from_kml(kml_file, definition = 0.3, margin = 100):
     with open(kml_file, 'r') as content_file:

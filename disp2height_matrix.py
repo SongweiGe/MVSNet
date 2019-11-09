@@ -7,7 +7,7 @@ import OpenEXR
 import numpy as np
 import matplotlib.pyplot as plt
 from rpcm.rpc_model import rpc_from_geotiff
-from triangulationRPC_matrix import triangulationRPC_array
+from triangulationRPC_matrix import triangulationRPC_matrix
 from scipy.interpolate import interp2d
 
 import pyproj
@@ -145,12 +145,17 @@ cu2 = cu1 + disparity_map[0, :, :]
 cu1, ru1 = apply_homography(h_left_inv, [cu1, ru1])
 cu2, ru2 = apply_homography(h_right_inv, [cu2, ru2])
 # import ipdb;ipdb.set_trace()
-ru1 = (ru1+left_bound[1]).reshape(-1)
-cu1 = (cu1+left_bound[0]).reshape(-1)
-ru2 = (ru2+right_bound[1]).reshape(-1)
-cu2 = (cu2+right_bound[0]).reshape(-1)
+# ru1 = (ru1+left_bound[1]).reshape(-1)
+# cu1 = (cu1+left_bound[0]).reshape(-1)
+# ru2 = (ru2+right_bound[1]).reshape(-1)
+# cu2 = (cu2+right_bound[0]).reshape(-1)
+ru1 = ru1.reshape(-1)
+cu1 = cu1.reshape(-1)
+ru2 = ru2.reshape(-1)
+cu2 = cu2.reshape(-1)
 begin_time = time.time()
-Xu,Yu,Zu,error2d,error3d =triangulationRPC_array(ru1, cu1, ru2, cu2, rpc_l_raw, rpc_r_raw, verbose=False)
+# Xu,Yu,Zu,error2d,error3d = triangulationRPC_array(ru1, cu1, ru2, cu2, rpc_l_raw, rpc_r_raw, verbose=False)
+Xu,Yu,Zu,error2d,error3d = triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc_l, rpc_r, verbose=False)
 height_map[0, :, :] = Xu.reshape(height_map.shape[1], height_map.shape[2])
 height_map[1, :, :] = Yu.reshape(height_map.shape[1], height_map.shape[2])
 height_map[2, :, :] = Zu.reshape(height_map.shape[1], height_map.shape[2])
@@ -181,21 +186,18 @@ ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
 int_im = griddata((iy.reshape(-1), ix.reshape(-1)), height_map[2, :, :].reshape(-1), (yy, xx))
 int_im = geo_utils.fill_holes(int_im)
 
-data = int_im
-mask = np.isnan(data)
-data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
 fire_palette = scipy.misc.imread('image/fire_palette.png')[0][:, 0:3]
-color_map = eval_util.getColorMapFromPalette(data[y1:y2, x1:x2], fire_palette)
-scipy.misc.imsave('final_matrix.png', color_map)
+color_map = eval_util.getColorMapFromPalette(int_im[y1:y2, x1:x2], fire_palette)
+scipy.misc.imsave('final_matrix_localrpc.png', color_map)
 
 
 amp_path = os.path.join(tmp_path, 'FF-%d.npy'%pair_id)
 amp_data = np.load(amp_path)
 color_map = eval_util.getColorMapFromPalette(amp_data[y1:y2, x1:x2], fire_palette)
-scipy.misc.imsave('final_amp_matrix.png', color_map)
+scipy.misc.imsave('final_amp_matrix_localrpc.png', color_map)
 
 amp_path = os.path.join(stereo_path, 'out-PC.tif')
 amp_data = open_gtiff(amp_path)
 
 color_map = eval_util.getColorMapFromPalette(height_map[2, :, :], fire_palette)
-scipy.misc.imsave('height_map_matrix.png', color_map)
+scipy.misc.imsave('height_map_matrix_localrpc.png', color_map)
