@@ -61,7 +61,7 @@ def RPCforwardform_matrix(p,q,X,Y,Z):
     return pixel_coordinate
 
 
-def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
+def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, Niter=5, verbose=False):
     npoints = len(ru1)
     #  setup Parameters based on the notation
     p1_1 = np.array(rpc1.row_num, dtype=np.float64)
@@ -152,7 +152,6 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
 
     # DeltaZu=10
     # next iterations
-    Niter=5
     NormXold=0
     NormYold=0
     NormZold=0
@@ -243,7 +242,7 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         # solution 
         for i in range(npoints):
             LSsol= np.matmul(np.matmul(np.linalg.inv(np.matmul(A[:, :, i].T, A[:, :, i])), A[:, :, i].T),b[:, i])
-            import ipdb;ipdb.set_trace()
+            # import ipdb;ipdb.set_trace()
             DeltaXu[i]=LSsol[0]
             DeltaYu[i]=LSsol[1]
             DeltaZu[i]=LSsol[2]

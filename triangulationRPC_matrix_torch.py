@@ -63,8 +63,9 @@ def RPCforwardform_matrix(p,q,X,Y,Z):
     return pixel_coordinate
 
 
-def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
+def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=100):
     npoints = len(ru1)
+    print('start triangulation with number of points: %d'%npoints)
     #  setup Parameters based on the notation
     p1_1 = torch.cuda.DoubleTensor(np.array(rpc1.row_num, dtype=np.float64))
     p2_1 = torch.cuda.DoubleTensor(np.array(rpc1.row_den, dtype=np.float64))
@@ -143,13 +144,16 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     DeltaXu = torch.zeros(npoints)
     DeltaYu = torch.zeros(npoints)
     DeltaZu = torch.zeros(npoints)
-    for i in range(npoints//1000):
-        print(i)
-        id_min = i*1000
-        id_max = np.min([(i+1)*1000, npoints])
+    for i in range(npoints//inverse_bs):
+        # print(i)
+        id_min = i*inverse_bs
+        id_max = np.min([(i+1)*inverse_bs, npoints])
         A_temp = A[id_min:id_max]
         b_temp = b[id_min:id_max]
-        LSsol= torch.matmul(torch.matmul(torch.inverse(torch.matmul(A_temp.transpose(2, 1), A_temp)), A_temp.transpose(2, 1)),b_temp)
+        try:
+            LSsol= torch.matmul(torch.matmul(torch.inverse(torch.matmul(A_temp.transpose(2, 1), A_temp)), A_temp.transpose(2, 1)),b_temp)
+        except:
+            import ipdb;ipdb.set_trace()
         DeltaXu[id_min:id_max]=LSsol[:, 2, 0]
         DeltaYu[id_min:id_max]=LSsol[:, 1, 0]
         DeltaZu[id_min:id_max]=LSsol[:, 0, 0]
@@ -247,13 +251,16 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         b = torch.stack([r1-r1_hat, c1-c1_hat, r2-r2_hat, c2-c2_hat]).transpose(1, 0).view(-1, 4, 1)
         # bb=b.*[scale_offsets_1(9)scale_offsets_1(10)scale_offsets_2(9)scale_offsets_2(10)]
         # solution 
-        for i in range(npoints//1000):
-            print(i)
-            id_min = i*1000
-            id_max = np.min([(i+1)*1000, npoints])
+        for i in range(npoints//inverse_bs):
+            # print(i)
+            id_min = i*inverse_bs
+            id_max = np.min([(i+1)*inverse_bs, npoints])
             A_temp = A[id_min:id_max]
             b_temp = b[id_min:id_max]
-            LSsol= torch.matmul(torch.matmul(torch.inverse(torch.matmul(A_temp.transpose(2, 1), A_temp)), A_temp.transpose(2, 1)),b_temp)
+            try:
+                LSsol= torch.matmul(torch.matmul(torch.inverse(torch.matmul(A_temp.transpose(2, 1), A_temp)), A_temp.transpose(2, 1)),b_temp)
+            except:
+                import ipdb;ipdb.set_trace()
             DeltaXu[id_min:id_max]=LSsol[:, 0, 0]
             DeltaYu[id_min:id_max]=LSsol[:, 1, 0]
             DeltaZu[id_min:id_max]=LSsol[:, 2, 0]

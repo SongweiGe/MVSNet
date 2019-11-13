@@ -116,15 +116,14 @@ class MVSdataset(data.Dataset):
         # N x P x W x H x 2
         begin_time = time.time()
         print('start to load data')
-        for filename in filenames[-1:]:
-            filename = 'dem_10_13'
-            # if len(os.listdir(os.path.join(data_path, filename, 'stereo'))) < 10:
-            #     continue
+        for filename in filenames:
+            if len(os.listdir(os.path.join(data_path, filename, 'stereo'))) < 1:
+                continue
             img_left, img_right, rpc_l, rpc_r, h_l, h_r, bbox, bounds, im_size, height_gt = load_folder(tmp_path=os.path.join(data_path, filename), 
                         kml_file=os.path.join(kml_path, filename+'.kml'), gt_path=os.path.join(gt_path, filename+'.npy'), mode='train')
             # import ipdb;ipdb.set_trace()
-            img_left = np.pad(img_left, [[0, 1024-img_left.shape[0]], [0, 1024-img_left.shape[1]]], 'constant', constant_values=(0, 0))
-            img_right = np.pad(img_right, [[0, 1024-img_right.shape[0]], [0, 1024-img_right.shape[1]]], 'constant', constant_values=(0, 0))
+            img_left = np.pad(img_left, [[0, 1088-img_left.shape[0]], [0, 1088-img_left.shape[1]]], 'constant', constant_values=(0, 0))
+            img_right = np.pad(img_right, [[0, 1088-img_right.shape[0]], [0, 1088-img_right.shape[1]]], 'constant', constant_values=(0, 0))
             self.left_masks.append(img_left>0)
             self.img_pair.append(np.stack([img_left, img_right]))
             self.h_pair.append([h_l, h_r])

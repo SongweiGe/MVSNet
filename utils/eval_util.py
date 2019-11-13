@@ -58,4 +58,4 @@ def evaluate(input_data, gt_data):
     acc_metric = accuracy(input_data, gt_data)
     com_metric = completeness(input_data, gt_data)
     l1e_metric = L1E(input_data, gt_data)
-    return rsme_metric, acc_metric, com_metric, l1e_metric
+    return rsme_metric, acc_metric[0], com_metric, l1e_metric

@@ -25,7 +25,7 @@ class Trainer(object):
         self.D = FlowNetS().cuda()
         # self.L = nn.MSELoss().cuda()
         self.L = nn.L1Loss().cuda()
-        self.optimizer = torch.optim.Adadelta(self.D.parameters(), lr=1.)
+        self.optimizer = torch.optim.Adadelta(self.D.parameters(), lr=0.1)
         self.dataloader = dataloader
         self.n_total = len(self.dataloader)
         self.shuffled_index = np.arange(self.n_total)
@@ -71,20 +71,28 @@ class Trainer(object):
         cu1 = cu1[masks].reshape(-1)
         ru2 = ru2[masks].reshape(-1)
         cu2 = cu2[masks].reshape(-1)
-        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc_l, rpc_r, verbose=False)
+        # import ipdb;ipdb.set_trace()
+        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc_l, rpc_r, verbose=False, inverse_bs=1000)
         valid_points = Zu > 0
 
 
-        xx, yy = np.meshgrid(np.arange(im_size[1]), np.arange(im_size[0]))
-        lons, lats = self.wgs84(Xu[valid_points].cpu().data.numpy(), Yu[valid_points].cpu().data.numpy())
-        ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
-        import ipdb;ipdb.set_trace()
-        input_coords = torch.stack([torch.cuda.FloatTensor(iy), torch.cuda.FloatTensor(ix)])
-        output_coords = torch.stack([torch.cuda.FloatTensor(yy), torch.cuda.FloatTensor(xx)])
-        int_im = self.interp_method(input_coords, Zu[valid_points], output_coords)
-        int_im = griddata((iy, ix), Zu[valid_points], (yy, xx))
-        int_im = geo_utils.fill_holes(int_im)
-        return int_im[bbox[0]:bbox[1], bbox[2]:bbox[3]]
+        # xx, yy = np.meshgrid(np.arange(im_size[1]), np.arange(im_size[0]))
+        # lons, lats = self.wgs84(Xu[valid_points].cpu().data.numpy(), Yu[valid_points].cpu().data.numpy())
+        # ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
+        # import ipdb;ipdb.set_trace()
+        # input_coords = torch.stack([torch.cuda.FloatTensor(iy), torch.cuda.FloatTensor(ix)])
+        # output_coords = torch.stack([torch.cuda.FloatTensor(yy), torch.cuda.FloatTensor(xx)])
+        # int_im = self.interp_method(input_coords, Zu[valid_points], output_coords)
+        # int_im = griddata((iy, ix), Zu[valid_points], (yy, xx))
+        # int_im = geo_utils.fill_holes(int_im)
+        # return int_im[bbox[0]:bbox[1], bbox[2]:bbox[3]]
+        return Xu[valid_points], Yu[valid_points], Zu[valid_points], Xu, Yu, Zu
+
+    def calculate_loss(self, X, Y, Z, gt):
+        # import ipdb;ipdb.set_trace()
+        grid = torch.stack([X, Y]).transpose(1, 0).view(1, 1, -1, 2)
+        gt_height = torch.nn.functional.grid_sample(gt.unsqueeze(1), grid.cuda()).squeeze()
+        return self.L(gt_height, Z.cuda())
 
     def run(self):
         self.D.train()
@@ -101,8 +109,8 @@ class Trainer(object):
             train_ids = self.shuffled_index
             # train_ids = np.setdiff1d(self.shuffled_index, test_ids)
             # import ipdb;ipdb.set_trace()
-            n_batch = train_ids.shape[0]//self.batch_size
-            n_test_batch = test_ids.shape[0]//self.batch_size
+            n_batch = train_ids.shape[0]//self.batch_size-1
+            n_test_batch = test_ids.shape[0]//self.batch_size-1
             # for p in self.D.parameters():
             #     self.weights_init(p)
             for j in range(self.n_epochs):
@@ -116,8 +124,8 @@ class Trainer(object):
                     if k == n_batch:
                         train_batch_ids = train_ids[k*self.batch_size:]
                     else:
-                        train_batch_ids = train_ids[k*self.batch_size:(k+1)*self.batch_size]
-                    img_pair, masks, h_pair, rpc_pair, area_info, y = self.dataloader.__getitem__(train_batch_ids[0])
+                        train_batch_ids = train_ids[(k+0)*self.batch_size:(k+1)*self.batch_size]
+                    img_pair, masks, h_pair, rpc_pair, area_info, y = self.dataloader.__getitem__((train_batch_ids[0]+7)%n_batch)
                     # import ipdb;ipdb.set_trace()
                     X = Variable(torch.cuda.FloatTensor([img_pair]), requires_grad=False)
                     Y = Variable(torch.cuda.FloatTensor([y]), requires_grad=False)
@@ -125,14 +133,16 @@ class Trainer(object):
                     masks = torch.tensor(masks.tolist())
                     self.optimizer.zero_grad()
                     disparity_map = self.D(X)[0]
-                    # import ipdb;ipdb.set_trace()
-                    pred_height = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
-                    loss = self.L(pred_height, Y)
+                    lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
+                    loss = self.calculate_loss(lon, lat, heights, Y)
                     loss_val = loss.data.cpu().numpy()
+                    if np.isnan(loss_val):
+                        import ipdb;ipdb.set_trace()
                     loss.backward()
                     self.optimizer.step()
                     train_epoch_loss.append(loss_val)
-                    del X,Y,pred_height,loss
+                    del X,Y,lon, lat, heights,loss
+                    print("Epochs %d, iteration: %d, time = %ds, training loss: %f"%(i, j, time.time() - begin, loss_val))
                 
                 if (j+1)%100 == 0:
                     torch.save(self.D.state_dict(), os.path.join('results', self.args.exp_name, 'models', 'fold%d_%d'%(i, j)))
@@ -152,8 +162,8 @@ class Trainer(object):
                 X = Variable(torch.cuda.FloatTensor(img_pair), requires_grad=False)
                 Y = Variable(torch.cuda.FloatTensor(y), requires_grad=False)
                 diaparity_map = self.D(X)[0]
-                pred_height = self.triangulation_forward(disparity_map, X.shape[1], X.shape[2], rpc_pair, h_pair, area_info)
-                loss = self.L(pred_height, Y)
+                lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
+                loss = self.calculate_loss(lon, lat, heights, Y)
                 loss_val = loss.data.cpu().numpy()
                 test_epoch_loss.append(loss_val)
                 output = (pred_height.cpu().data.numpy())
