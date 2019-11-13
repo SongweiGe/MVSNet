@@ -11,7 +11,9 @@ from torch.autograd import Variable
 import utils.data_util as data_util
 from utils.model_util import FlowNetS
 
+from utils import geo_utils
 from triangulationRPC_matrix_torch import triangulationRPC_matrix
+from torchinterp1d import Interp1d
 
 class Trainer(object):
     """docstring for Trainer"""
@@ -30,6 +32,7 @@ class Trainer(object):
         np.random.seed(2019)
         np.random.shuffle(self.shuffled_index)
         self.wgs84 = pyproj.Proj('+proj=utm +zone=21 +datum=WGS84 +south')
+        self.interp_method = Interp1d()
 
 
     def weights_init(self, m):
@@ -51,30 +54,35 @@ class Trainer(object):
         y1 = (h[3]*x[0] + h[4]*x[1] + h[5]) / z
         return y0, y1
 
-    def triangulation_forward(self, disparity_map, nrow, ncol, rpc_pair, h_pair, area_info):
+    def triangulation_forward(self, disparity_map, masks, nrow, ncol, rpc_pair, h_pair, area_info):
         rpc_l, rpc_r = rpc_pair
         h_left_inv, h_right_inv = h_pair
         bbox, bounds, im_size = area_info
-        # import ipdb;ipdb.set_trace()
-        cu1, ru1 = torch.meshgrid([torch.arange(ncol), torch.arange(nrow)])
-        cu1 = cu1.type(torch.cuda.DoubleTensor).transpose(1, 0)
-        ru1 = ru1.type(torch.cuda.DoubleTensor).transpose(1, 0)
-        ru2 = ru1 + disparity_map[0, 0, :, :].type(torch.cuda.DoubleTensor)
-        cu2 = cu1
+        cu1_rec, ru1_rec = torch.meshgrid([torch.arange(ncol), torch.arange(nrow)])
+        cu1_rec = cu1_rec.type(torch.cuda.DoubleTensor).transpose(1, 0)
+        ru1_rec = ru1_rec.type(torch.cuda.DoubleTensor).transpose(1, 0)
+        cu2_rec = cu1_rec + disparity_map[0, 0, :, :].type(torch.cuda.DoubleTensor)
+        ru2_rec = ru1_rec
+        # cu2_rec = cu1_rec
 
-        cu1, ru1 = self.apply_homography(h_left_inv, [cu1, ru1])
-        cu2, ru2 = self.apply_homography(h_right_inv, [cu2, ru2])
-        ru1 = ru1.reshape(-1)
-        cu1 = cu1.reshape(-1)
-        ru2 = ru2.reshape(-1)
-        cu2 = cu2.reshape(-1)
+        cu1, ru1 = self.apply_homography(h_left_inv, [cu1_rec, ru1_rec])
+        cu2, ru2 = self.apply_homography(h_right_inv, [cu2_rec, ru2_rec])
+        ru1 = ru1[masks].reshape(-1)
+        cu1 = cu1[masks].reshape(-1)
+        ru2 = ru2[masks].reshape(-1)
+        cu2 = cu2[masks].reshape(-1)
         Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc_l, rpc_r, verbose=False)
+        valid_points = Zu > 0
+
 
         xx, yy = np.meshgrid(np.arange(im_size[1]), np.arange(im_size[0]))
-        lons, lats = self.wgs84(Xu, Yu)
+        lons, lats = self.wgs84(Xu[valid_points].cpu().data.numpy(), Yu[valid_points].cpu().data.numpy())
         ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
-
-        int_im = griddata((iy, ix), Zu, (yy, xx))
+        import ipdb;ipdb.set_trace()
+        input_coords = torch.stack([torch.cuda.FloatTensor(iy), torch.cuda.FloatTensor(ix)])
+        output_coords = torch.stack([torch.cuda.FloatTensor(yy), torch.cuda.FloatTensor(xx)])
+        int_im = self.interp_method(input_coords, Zu[valid_points], output_coords)
+        int_im = griddata((iy, ix), Zu[valid_points], (yy, xx))
         int_im = geo_utils.fill_holes(int_im)
         return int_im[bbox[0]:bbox[1], bbox[2]:bbox[3]]
 
@@ -105,19 +113,20 @@ class Trainer(object):
                 # import ipdb;ipdb.set_trace()
                 for k in range(n_batch+1):
                     #forward calculation and back propagation, X: B x P x 2 x W x H
-                    # import ipdb;ipdb.set_trace()
                     if k == n_batch:
                         train_batch_ids = train_ids[k*self.batch_size:]
                     else:
                         train_batch_ids = train_ids[k*self.batch_size:(k+1)*self.batch_size]
-                    img_pair, h_pair, rpc_pair, area_info, y = self.dataloader.__getitem__(train_batch_ids[0])
+                    img_pair, masks, h_pair, rpc_pair, area_info, y = self.dataloader.__getitem__(train_batch_ids[0])
+                    # import ipdb;ipdb.set_trace()
                     X = Variable(torch.cuda.FloatTensor([img_pair]), requires_grad=False)
                     Y = Variable(torch.cuda.FloatTensor([y]), requires_grad=False)
                     h_pair = torch.cuda.DoubleTensor(np.stack(h_pair))
+                    masks = torch.tensor(masks.tolist())
                     self.optimizer.zero_grad()
                     disparity_map = self.D(X)[0]
                     # import ipdb;ipdb.set_trace()
-                    pred_height = self.triangulation_forward(disparity_map, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
+                    pred_height = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
                     loss = self.L(pred_height, Y)
                     loss_val = loss.data.cpu().numpy()
                     loss.backward()
@@ -181,10 +190,11 @@ if __name__ == '__main__':
 
     os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu_id
     data_path = '/disk/songwei/LockheedMartion/end2end/MVS/'
-    kml_path = '/disk/songwei/LockheedMartion/DeepVote/kml/'
-    gt_path = '/disk/songwei/LockheedMartion/DeepVote/DSM/'
+    kml_path = '/disk/songwei/LockheedMartion/end2end/KML/'
+    gt_path = '/disk/songwei/LockheedMartion/end2end/DSM/'
     train_dataset= data_util.MVSdataset(gt_path, data_path, kml_path)
     # train_loader = data.DataLoader(train_dataset, batch_size=1, shuffle=True)
+    # import ipdb;ipdb.set_trace()
     trainer = Trainer(args, train_dataset)
     if args.load_model:
         trainer.D.load_state_dict(torch.load(os.path.join('../results', args.exp_name, 'models', '%s_%d'%(args.input_fold, args.input_epoch))))

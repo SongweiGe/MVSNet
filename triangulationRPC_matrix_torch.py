@@ -13,9 +13,9 @@ def RPCunnormalization(normdata,offset,scale):
 def RPCsinglepolynomialderivativeX_matrix(p,X,Y,Z):
     npoints = len(X)
     # monomial=[1 X Y Z X*Y X*Z Y*Z X**2 Y**2 Z**2 X*Y*Z X**3 X*Y**2 X*Z**2 X**2*Y Y**3 Y*Z**2 X**2*Z Y**2*Z Z**3]
-    monomial = torch.cuda.DoubleTensor(np.array([torch.zeros(npoints), torch.ones(npoints), torch.zeros(npoints), torch.zeros(npoints), Y, Z, torch.zeros(npoints), 
+    monomial = torch.stack([torch.zeros(npoints), torch.ones(npoints), torch.zeros(npoints), torch.zeros(npoints), Y, Z, torch.zeros(npoints), 
                 2*X, torch.zeros(npoints), torch.zeros(npoints), Y*Z, 3*X**2, Y**2, Z**2, 2*X*Y, torch.zeros(npoints), 
-                torch.zeros(npoints), 2*X*Z, torch.zeros(npoints), torch.zeros(npoints)])) # 20 x npoints
+                torch.zeros(npoints), 2*X*Z, torch.zeros(npoints), torch.zeros(npoints)]).double().cuda() # 20 x npoints
     sol = torch.sum(p.reshape(-1, 1)*monomial, 0)
     return sol
 
@@ -23,9 +23,9 @@ def RPCsinglepolynomialderivativeX_matrix(p,X,Y,Z):
 def RPCsinglepolynomialderivativeY_matrix(p,X,Y,Z):
     npoints = len(X)
     # monomial=[1 X Y Z X*Y X*Z Y*Z X**2 Y**2 Z**2 X*Y*Z X**3 X*Y**2 X*Z**2 X**2*Y Y**3 Y*Z**2 X**2*Z Y**2*Z Z**3]
-    monomial = torch.cuda.DoubleTensor(np.array([torch.zeros(npoints), torch.zeros(npoints), torch.ones(npoints), torch.zeros(npoints), X, torch.zeros(npoints), Z, 
+    monomial = torch.stack([torch.zeros(npoints), torch.zeros(npoints), torch.ones(npoints), torch.zeros(npoints), X, torch.zeros(npoints), Z, 
             torch.zeros(npoints), 2*Y, torch.zeros(npoints), X*Z, torch.zeros(npoints), X*2*Y, torch.zeros(npoints), 
-            X**2, 3*Y**2, Z**2, torch.zeros(npoints), 2*Y*Z, torch.zeros(npoints)]))
+            X**2, 3*Y**2, Z**2, torch.zeros(npoints), 2*Y*Z, torch.zeros(npoints)]).double().cuda()
     sol = torch.sum(p.reshape(-1, 1)*monomial, 0)
     return sol
    
@@ -33,17 +33,18 @@ def RPCsinglepolynomialderivativeY_matrix(p,X,Y,Z):
 def RPCsinglepolynomialderivativeZ_matrix(p,X,Y,Z):
     npoints = len(X)
     # monomial=[1 X Y Z X*Y X*Z Y*Z X**2 Y**2 Z**2 X*Y*Z X**3 X*Y**2 X*Z**2 X**2*Y Y**3 Y*Z**2 X**2*Z Y**2*Z Z**3]
-    monomial = torch.cuda.DoubleTensor(np.array([torch.zeros(npoints), torch.zeros(npoints), torch.zeros(npoints), torch.ones(npoints), torch.zeros(npoints), X, Y, 
+    monomial = torch.stack([torch.zeros(npoints), torch.zeros(npoints), torch.zeros(npoints), torch.ones(npoints), torch.zeros(npoints), X, Y, 
             torch.zeros(npoints), torch.zeros(npoints), 2*Z, X*Y, torch.zeros(npoints), torch.zeros(npoints), X*2*Z, 
-            torch.zeros(npoints), torch.zeros(npoints), Y*2*Z, X**2, Y**2, 3*Z**2]))
+            torch.zeros(npoints), torch.zeros(npoints), Y*2*Z, X**2, Y**2, 3*Z**2]).double().cuda()
     sol = torch.sum(p.reshape(-1, 1)*monomial, 0)
     return sol 
 
 
 def RPCsinglepolynomial_matrix(p,X,Y,Z):
     npoints = len(X)
-    monomial = torch.cuda.DoubleTensor(np.array([torch.ones(npoints), X, Y, Z, X*Y, X*Z, Y*Z, X**2, Y**2, Z**2, X*Y*Z, 
-                X**3, X*Y**2, X*Z**2, X**2*Y, Y**3, Y*Z**2, X**2*Z, Y**2*Z, Z**3]))
+    # import ipdb;ipdb.set_trace()
+    monomial = torch.stack([torch.ones(npoints), X, Y, Z, X*Y, X*Z, Y*Z, X**2, Y**2, Z**2, X*Y*Z, 
+                X**3, X*Y**2, X*Z**2, X**2*Y, Y**3, Y*Z**2, X**2*Z, Y**2*Z, Z**3]).double().cuda()
     sol = torch.sum(p.reshape(-1, 1)*monomial, 0)
     return sol
 
@@ -52,8 +53,8 @@ def RPCforwardform_matrix(p,q,X,Y,Z):
     npoints = len(X)
     # num = torch.zeros((npoints,20))
     # den = torch.zeros((npoints,20))
-    monomial = torch.cuda.DoubleTensor(np.array([torch.ones(npoints), X, Y, Z, X*Y, X*Z, Y*Z, X**2, Y**2, Z**2, X*Y*Z, 
-                X**3, X*Y**2, X*Z**2, X**2*Y, Y**3, Y*Z**2, X**2*Z, Y**2*Z, Z**3]))
+    monomial = torch.stack([torch.ones(npoints), X, Y, Z, X*Y, X*Z, Y*Z, X**2, Y**2, Z**2, X*Y*Z, 
+                X**3, X*Y**2, X*Z**2, X**2*Y, Y**3, Y*Z**2, X**2*Z, Y**2*Z, Z**3]).double().cuda()
     num = torch.sum(p.reshape(-1, 1)*monomial, 0)
     den = torch.sum(q.reshape(-1, 1)*monomial, 0)
     if (den == 0).all():
@@ -138,15 +139,14 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         torch.stack([c1_1-c1*d1_1, c2_1-c1*d2_1, c3_1-c1*d3_1]),
         torch.stack([a1_2-r2*b1_2, a2_2-r2*b2_2, a3_2-r2*b3_2]),
         torch.stack([c1_2-c2*d1_2, c2_2-c2*d2_2, c3_2-c2*d3_2])]).permute(2, 0, 1) # 4 x 4 x npoints
-    b=torch.stack([r1*b0_1-a0_1,c1*d0_1-c0_1,r2*b0_2-a0_2,c2*d0_2-c0_2]).view(-1, 4, 1) # 4 x npoints
+    b=torch.stack([r1*b0_1-a0_1,c1*d0_1-c0_1,r2*b0_2-a0_2,c2*d0_2-c0_2]).transpose(1, 0).view(-1, 4, 1) # 4 x npoints
     DeltaXu = torch.zeros(npoints)
     DeltaYu = torch.zeros(npoints)
     DeltaZu = torch.zeros(npoints)
-    # import ipdb;ipdb.set_trace()
-    for i in range(npoints//30000):
+    for i in range(npoints//1000):
         print(i)
-        id_min = i*30000
-        id_max = np.min([(i+1)*30000, npoints])
+        id_min = i*1000
+        id_max = np.min([(i+1)*1000, npoints])
         A_temp = A[id_min:id_max]
         b_temp = b[id_min:id_max]
         LSsol= torch.matmul(torch.matmul(torch.inverse(torch.matmul(A_temp.transpose(2, 1), A_temp)), A_temp.transpose(2, 1)),b_temp)
@@ -159,16 +159,16 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
 
     # DeltaZu=10
     # next iterations
-    Niter=5
+    Niter=1
     NormXold=0
     NormYold=0
     NormZold=0
-    Xunew_1=DeltaXu
-    Yunew_1=DeltaYu
-    Zunew_1=DeltaZu
-    Xunew_2=DeltaXu
-    Yunew_2=DeltaYu
-    Zunew_2=DeltaZu
+    Xunew_1=DeltaXu+0
+    Yunew_1=DeltaYu+0
+    Zunew_1=DeltaZu+0
+    Xunew_2=DeltaXu+0
+    Yunew_2=DeltaYu+0
+    Zunew_2=DeltaZu+0
     NormupdateX_1=RPCnormalization(DeltaXu,Xo_1,Xs_1)    
     NormupdateY_1=RPCnormalization(DeltaYu,Yo_1,Ys_1)
     NormupdateZ_1=RPCnormalization(DeltaZu,Zo_1,Zs_1)
@@ -183,7 +183,6 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
     NormZnew_2=NormZold+NormupdateZ_2
     error_residual_old=10e10
     cnt=0
-    # import ipdb;ipdb.set_trace()
     for it in range(Niter):
         # import ipdb;ipdb.set_trace()
         # system eqs
@@ -240,20 +239,30 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         A = torch.stack([torch.stack([pdXrow_1/Xs_1, pdYrow_1/Ys_1, pdZrow_1/Zs_1]),
             torch.stack([pdXcol_1/Xs_1, pdYcol_1/Ys_1, pdZcol_1/Zs_1]),
             torch.stack([pdXrow_2/Xs_2, pdYrow_2/Ys_2, pdZrow_2/Zs_2]),
-            torch.stack([pdXcol_2/Xs_2, pdYcol_2/Ys_2, pdZcol_2/Zs_2])])
+            torch.stack([pdXcol_2/Xs_2, pdYcol_2/Ys_2, pdZcol_2/Zs_2])]).permute(2, 0, 1)
         r1_hat = RPCforwardform_matrix(p1_1,p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
         c1_hat = RPCforwardform_matrix(p3_1,p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
         r2_hat = RPCforwardform_matrix(p1_2,p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
         c2_hat = RPCforwardform_matrix(p3_2,p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
-        b = torch.stack([r1-r1_hat, c1-c1_hat, r2-r2_hat, c2-c2_hat])
+        b = torch.stack([r1-r1_hat, c1-c1_hat, r2-r2_hat, c2-c2_hat]).transpose(1, 0).view(-1, 4, 1)
         # bb=b.*[scale_offsets_1(9)scale_offsets_1(10)scale_offsets_2(9)scale_offsets_2(10)]
         # solution 
-        for i in range(npoints):
-            # import ipdb;ipdb.set_trace()
-            LSsol= torch.matmul(torch.matmul(torch.inverse(torch.matmul(A[:, :, i].transpose(1,0), A[:, :, i])), A[:, :, i].transpose(1,0)),b[:, i])
-            DeltaXu[i]=LSsol[0]
-            DeltaYu[i]=LSsol[1]
-            DeltaZu[i]=LSsol[2]
+        for i in range(npoints//1000):
+            print(i)
+            id_min = i*1000
+            id_max = np.min([(i+1)*1000, npoints])
+            A_temp = A[id_min:id_max]
+            b_temp = b[id_min:id_max]
+            LSsol= torch.matmul(torch.matmul(torch.inverse(torch.matmul(A_temp.transpose(2, 1), A_temp)), A_temp.transpose(2, 1)),b_temp)
+            DeltaXu[id_min:id_max]=LSsol[:, 0, 0]
+            DeltaYu[id_min:id_max]=LSsol[:, 1, 0]
+            DeltaZu[id_min:id_max]=LSsol[:, 2, 0]
+        # for i in range(npoints):
+        #     # import ipdb;ipdb.set_trace()
+        #     LSsol= torch.matmul(torch.matmul(torch.inverse(torch.matmul(A[:, :, i].transpose(1,0), A[:, :, i])), A[:, :, i].transpose(1,0)),b[:, i])
+        #     DeltaXu[i]=LSsol[0]
+        #     DeltaYu[i]=LSsol[1]
+        #     DeltaZu[i]=LSsol[2]
         # sanity check torch.matmul(A, LSsol)-b
         # if it == 1:
         #     import ipdb;ipdb.set_trace()
@@ -261,6 +270,7 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         Xuold = Xunew_1
         Yuold = Yunew_1
         Zuold = Zunew_1 
+        # import ipdb;ipdb.set_trace()
         Xunew_1 = Xunew_1 + DeltaXu
         Yunew_1 = Yunew_1 + DeltaYu
         Zunew_1 = Zunew_1 + DeltaZu

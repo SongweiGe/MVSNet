@@ -242,8 +242,8 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose):
         # bb=b.*[scale_offsets_1(9)scale_offsets_1(10)scale_offsets_2(9)scale_offsets_2(10)]
         # solution 
         for i in range(npoints):
-            # import ipdb;ipdb.set_trace()
             LSsol= np.matmul(np.matmul(np.linalg.inv(np.matmul(A[:, :, i].T, A[:, :, i])), A[:, :, i].T),b[:, i])
+            import ipdb;ipdb.set_trace()
             DeltaXu[i]=LSsol[0]
             DeltaYu[i]=LSsol[1]
             DeltaZu[i]=LSsol[2]
