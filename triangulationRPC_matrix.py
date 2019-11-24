@@ -174,6 +174,8 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, Niter=5, verbose=Fal
     NormYnew_2=NormYold+NormupdateY_2
     NormZnew_2=NormZold+NormupdateZ_2
     error_residual_old=10e10
+    error_pixel_residual_1=10e10
+    error_pixel_residual_2=10e10
     cnt=0
     # import ipdb;ipdb.set_trace()
     for it in range(Niter):
@@ -299,12 +301,12 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, Niter=5, verbose=Fal
             print('Unnorm update DeltaZu:%.10f at iter %d\n'%(DeltaZu,it))
             print('Unnorm error_residual_m:%.10f error_pixel_residual_1:%.4f error_pixel_residual_2:%.4f at iter %d\n'%
                 (error_residual,error_pixel_residual_1,error_pixel_residual_2,it))
-        Xu = Xunew_1*0.5+Xunew_2*0.5
-        Yu = Yunew_1*0.5+Yunew_2*0.5
-        Zu = Zunew_1*0.5+Zunew_2*0.5        
-        error_residual_old=error_residual
+    Xu = Xunew_1*0.5+Xunew_2*0.5
+    Yu = Yunew_1*0.5+Yunew_2*0.5
+    Zu = Zunew_1*0.5+Zunew_2*0.5        
+    # error_residual_old=error_residual
     # import ipdb;ipdb.set_trace()
-    return Xu,Yu,Zu,error_residual,error_pixel_residual_1*0.5+error_pixel_residual_2*0.5
+    return Xu,Yu,Zu,error_residual_old,error_pixel_residual_1*0.5+error_pixel_residual_2*0.5
 
 
 if __name__ == '__main__':

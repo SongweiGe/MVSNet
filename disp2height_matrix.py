@@ -74,7 +74,7 @@ accs = [[], []]
 coms = [[], []]
 l1es = [[], []]
 
-for niter in range(1, 6):
+for niter in range(1):
     fw = open('debug/log%d.txt'%niter, 'w')
     for filename in filenames:
         fw.write(filename+'\n')
