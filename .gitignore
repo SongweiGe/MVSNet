@@ -3,6 +3,7 @@ results/
 debug/
 torchsearchsorted/
 torchinterp1d/
+log.txt
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

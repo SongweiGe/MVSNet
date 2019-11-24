@@ -1,15 +1,18 @@
 """
 Data  Utils.
 """
+try:
+    import OpenEXR
+    import imageio as misc
+    from rpcm.rpc_model import rpc_from_geotiff
+except :
+    pass
+
 
 import os
 import time
-import OpenEXR
 import numpy as np
-import imageio as misc
-from rpcm.rpc_model import rpc_from_geotiff
-from geo_utils import open_gtiff, get_bounds_and_imsize_from_kml
-
+from geo_utils import open_gtiff, get_bounds_and_imsize_from_kml, rpc_to_dict, RPCModel
 import torch.utils.data as data
 
 def load_bbox(path):
@@ -122,19 +125,42 @@ class MVSdataset(data.Dataset):
             img_left, img_right, rpc_l, rpc_r, h_l, h_r, bbox, bounds, im_size, height_gt = load_folder(tmp_path=os.path.join(data_path, filename), 
                         kml_file=os.path.join(kml_path, filename+'.kml'), gt_path=os.path.join(gt_path, filename+'.npy'), mode='train')
             # import ipdb;ipdb.set_trace()
-            img_left = np.pad(img_left, [[0, 1088-img_left.shape[0]], [0, 1088-img_left.shape[1]]], 'constant', constant_values=(0, 0))
-            img_right = np.pad(img_right, [[0, 1088-img_right.shape[0]], [0, 1088-img_right.shape[1]]], 'constant', constant_values=(0, 0))
+            img_left = np.pad(img_left, [[0, 1280-img_left.shape[0]], [0, 1280-img_left.shape[1]]], 'constant', constant_values=(0, 0))
+            img_right = np.pad(img_right, [[0, 1280-img_right.shape[0]], [0, 1280-img_right.shape[1]]], 'constant', constant_values=(0, 0))
             self.left_masks.append(img_left>0)
             self.img_pair.append(np.stack([img_left, img_right]))
             self.h_pair.append([h_l, h_r])
             self.rpc_pair.append([rpc_l, rpc_r])
             self.area_info.append([bbox, bounds, im_size])
-            self.Ally.append(height_gt)
+            self.Ally.append(height_gt[:250, :250])
         print('it took %.2fs to load data'%(time.time()-begin_time))
 
     def __getitem__(self, index):
         return self.img_pair[index], self.left_masks[index], self.h_pair[index], self.rpc_pair[index], self.area_info[index], self.Ally[index]
 
+    def __len__(self):
+        return len(self.h_pair)
+
+    def save_data(self, filename='results/data_all.npz'):
+        rpc_dict_pair = [[rpc_to_dict(item[0]), rpc_to_dict(item[1])] for item in self.rpc_pair]
+        np.savez(filename, masks=self.left_masks, images=self.img_pair, hs=self.h_pair, rpcs=rpc_dict_pair, area_infos=self.area_info, ys=self.Ally)
+        data = np.load(filename, allow_pickle=True)
+
+
+class MVSdataset_lithium(data.Dataset):
+    def __init__(self, data_file='results/data_all.npz'):
+        # load input data
+        begin_time = time.time()
+        data = np.load(data_file, allow_pickle=True)
+        self.img_pair = data['images']
+        self.rpc_pair = [[RPCModel(item[0]), RPCModel(item[1])] for item in data['rpcs']]
+        self.h_pair = data['hs']
+        self.area_info = data['area_infos']
+        self.left_masks = data['masks']
+        self.Ally = data['ys']
+        print('it took %.2fs to load data'%(time.time()-begin_time))
+    def __getitem__(self, index):
+        return self.img_pair[index], self.left_masks[index], self.h_pair[index], self.rpc_pair[index], self.area_info[index], self.Ally[index]
     def __len__(self):
         return len(self.h_pair)
 

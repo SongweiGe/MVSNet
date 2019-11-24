@@ -23,8 +23,8 @@ class Trainer(object):
         self.n_epochs = args.epochs
         self.batch_size = args.batch_size
         self.D = FlowNetS().cuda()
-        # self.L = nn.MSELoss().cuda()
-        self.L = nn.L1Loss().cuda()
+        self.L = nn.MSELoss().cuda()
+        # self.L = nn.L1Loss().cuda()
         self.optimizer = torch.optim.Adadelta(self.D.parameters(), lr=1e-0)
         self.dataloader = dataloader
         self.n_total = len(self.dataloader)
@@ -73,24 +73,22 @@ class Trainer(object):
         cu2 = cu2[masks].reshape(-1)
         # import ipdb;ipdb.set_trace()
         Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc_l, rpc_r, verbose=False, inverse_bs=1000)
-        valid_points = Zu != 0
 
-
-        # xx, yy = np.meshgrid(np.arange(im_size[1]), np.arange(im_size[0]))
-        # lons, lats = self.wgs84(Xu[valid_points].cpu().data.numpy(), Yu[valid_points].cpu().data.numpy())
-        # ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
-        # import ipdb;ipdb.set_trace()
+        xx, yy = np.meshgrid(np.arange(im_size[1]), np.arange(im_size[0]))
+        lons, lats = self.wgs84(Xu.cpu().data.numpy(), Yu.cpu().data.numpy())
+        ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
+        valid_points = np.logical_and(np.logical_and(iy>bbox[0], iy<bbox[1]), np.logical_and(ix>bbox[2], ix<bbox[3]))
         # input_coords = torch.stack([torch.cuda.FloatTensor(iy), torch.cuda.FloatTensor(ix)])
         # output_coords = torch.stack([torch.cuda.FloatTensor(yy), torch.cuda.FloatTensor(xx)])
         # int_im = self.interp_method(input_coords, Zu[valid_points], output_coords)
         # int_im = griddata((iy, ix), Zu[valid_points], (yy, xx))
         # int_im = geo_utils.fill_holes(int_im)
         # return int_im[bbox[0]:bbox[1], bbox[2]:bbox[3]]
-        return Xu[valid_points], Yu[valid_points], Zu[valid_points], Xu, Yu, Zu
+        return ix[valid_points]-bbox[2], iy[valid_points]-bbox[0], Zu[np.where(valid_points)], Xu, Yu, Zu
 
     def calculate_loss(self, X, Y, Z, gt):
         # import ipdb;ipdb.set_trace()
-        grid = torch.stack([X, Y]).transpose(1, 0).view(1, 1, -1, 2)
+        grid = torch.stack([torch.cuda.FloatTensor(X), torch.cuda.FloatTensor(Y)]).transpose(1, 0).view(1, 1, -1, 2)
         gt_height = torch.nn.functional.grid_sample(gt.unsqueeze(1), grid.cuda()).squeeze()
         return self.L(gt_height, Z.cuda())
 
@@ -125,8 +123,7 @@ class Trainer(object):
                         train_batch_ids = train_ids[k*self.batch_size:]
                     else:
                         train_batch_ids = train_ids[(k+0)*self.batch_size:(k+1)*self.batch_size]
-                    img_pair, masks, h_pair, rpc_pair, area_info, y = self.dataloader.__getitem__((train_batch_ids[0]+7)%n_batch)
-                    # import ipdb;ipdb.set_trace()
+                    img_pair, masks, h_pair, rpc_pair, area_info, y = self.dataloader.__getitem__(train_batch_ids[0])
                     X = Variable(torch.cuda.FloatTensor([img_pair]), requires_grad=False)
                     Y = Variable(torch.cuda.FloatTensor([y]), requires_grad=False)
                     h_pair = torch.cuda.DoubleTensor(np.stack(h_pair))
@@ -134,11 +131,13 @@ class Trainer(object):
                     self.optimizer.zero_grad()
                     disparity_map = self.D(X)[0]
                     lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
+                    # import ipdb;ipdb.set_trace()
                     loss = self.calculate_loss(lon, lat, heights, Y)
                     loss_val = loss.data.cpu().numpy()
                     print('The number of remaining points:%d'%len(lon))
                     if np.isnan(loss_val):
-                        import ipdb;ipdb.set_trace()
+                        continue
+                        # import ipdb;ipdb.set_trace()
                     loss.backward()
                     self.optimizer.step()
                     train_epoch_loss.append(loss_val)
@@ -163,8 +162,8 @@ class Trainer(object):
                 X = Variable(torch.cuda.FloatTensor(img_pair), requires_grad=False)
                 Y = Variable(torch.cuda.FloatTensor(y), requires_grad=False)
                 diaparity_map = self.D(X)[0]
-                lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map[:, :, 300:400, 300:400], masks[300:400, 300:400], 100, 100, rpc_pair, h_pair, area_info)
-                # lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
+                # lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map[:, :, 300:400, 300:400], masks[300:400, 300:400], 100, 100, rpc_pair, h_pair, area_info)
+                lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
                 loss = self.calculate_loss(lon, lat, heights, Y)
                 loss_val = loss.data.cpu().numpy()
                 test_epoch_loss.append(loss_val)
