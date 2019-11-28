@@ -29,7 +29,7 @@ class Trainer(object):
         self.D = FlowNetS(input_channels=3).cuda()
         # self.L = nn.MSELoss().cuda()
         self.L = nn.L1Loss().cuda()
-        self.optimizer = torch.optim.Adadelta(self.D.parameters(), lr=1e-2)
+        self.optimizer = torch.optim.Adadelta(self.D.parameters(), lr=1e-0)
         self.dataloader = dataloader
         self.n_total = len(self.dataloader)
         self.shuffled_index = np.arange(self.n_total)
@@ -100,7 +100,6 @@ class Trainer(object):
         # xx, yy = np.meshgrid(np.arange(250), np.arange(250))
         # input_coords = torch.stack([torch.cuda.FloatTensor(Y), torch.cuda.FloatTensor(X)])
         # output_coords = torch.stack([torch.cuda.FloatTensor(yy), torch.cuda.FloatTensor(xx)])
-        # int_im = self.interp_method(input_coords, Z, output_coords)
         # int_im = griddata((Y, X), Z.cpu().data.numpy(), (yy, xx))
         # int_im = geo_utils.fill_holes(int_im)
 
