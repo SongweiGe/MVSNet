@@ -1,5 +1,6 @@
 import os
 import time
+import imageio
 import pyproj
 import argparse
 import numpy as np
@@ -10,10 +11,13 @@ from torch.autograd import Variable
 
 import utils.data_util as data_util
 from utils.model_util import FlowNetS
+from scipy.interpolate import griddata
 
-from utils import geo_utils
+from utils import geo_utils, eval_util
 from triangulationRPC_matrix_torch import triangulationRPC_matrix
 # from torchinterp1d import Interp1d
+
+fire_palette = imageio.imread('./image/fire_palette.png')[0][:, 0:3]
 
 class Trainer(object):
     def __init__(self, args, dataloader):
@@ -32,6 +36,10 @@ class Trainer(object):
         np.random.shuffle(self.shuffled_index)
         self.wgs84 = pyproj.Proj('+proj=utm +zone=21 +datum=WGS84 +south')
         # self.interp_method = Interp1d()
+        self.cu1_rec, self.ru1_rec = torch.meshgrid([torch.arange(ncol), torch.arange(nrow)])
+        self.cu1_rec = self.cu1_rec.type(torch.cuda.DoubleTensor).transpose(1, 0)
+        self.ru1_rec = self.ru1_rec.type(torch.cuda.DoubleTensor).transpose(1, 0)
+        self.xx, self.yy = np.meshgrid(np.arange(im_size[1]), np.arange(im_size[0]))
 
 
     def weights_init(self, m):
@@ -57,39 +65,57 @@ class Trainer(object):
         rpc_l, rpc_r = rpc_pair
         h_left_inv, h_right_inv = h_pair
         bbox, bounds, im_size = area_info
-        cu1_rec, ru1_rec = torch.meshgrid([torch.arange(ncol), torch.arange(nrow)])
-        cu1_rec = cu1_rec.type(torch.cuda.DoubleTensor).transpose(1, 0)
-        ru1_rec = ru1_rec.type(torch.cuda.DoubleTensor).transpose(1, 0)
-        cu2_rec = cu1_rec + disparity_map[0, 0, :, :].type(torch.cuda.DoubleTensor)
-        ru2_rec = ru1_rec
+        cu2_rec = self.cu1_rec + disparity_map[0, 0, :, :].type(torch.cuda.DoubleTensor)
+        ru2_rec = self.ru1_rec
         # cu2_rec = cu1_rec
 
-        cu1, ru1 = self.apply_homography(h_left_inv, [cu1_rec, ru1_rec])
+        cu1, ru1 = self.apply_homography(h_left_inv, [self.cu1_rec, self.ru1_rec])
         cu2, ru2 = self.apply_homography(h_right_inv, [cu2_rec, ru2_rec])
         ru1 = ru1[masks].reshape(-1)
         cu1 = cu1[masks].reshape(-1)
         ru2 = ru2[masks].reshape(-1)
         cu2 = cu2[masks].reshape(-1)
         # import ipdb;ipdb.set_trace()
-        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1[:630000], cu1[:630000], ru2[:630000], cu2[:630000], rpc_l, rpc_r, verbose=False, inverse_bs=1000)
+        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc_l, rpc_r, verbose=False, inverse_bs=1000)
 
-        xx, yy = np.meshgrid(np.arange(im_size[1]), np.arange(im_size[0]))
         lons, lats = self.wgs84(Xu.cpu().data.numpy(), Yu.cpu().data.numpy())
         ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
         valid_points = np.logical_and(np.logical_and(iy>bbox[0], iy<bbox[0]+250), np.logical_and(ix>bbox[2], ix<bbox[2]+250))
         # input_coords = torch.stack([torch.cuda.FloatTensor(iy), torch.cuda.FloatTensor(ix)])
-        # output_coords = torch.stack([torch.cuda.FloatTensor(yy), torch.cuda.FloatTensor(xx)])
+        # output_coords = torch.stack([torch.cuda.FloatTensor(self.yy), torch.cuda.FloatTensor(self.xx)])
         # int_im = self.interp_method(input_coords, Zu[valid_points], output_coords)
-        # int_im = griddata((iy, ix), Zu[valid_points], (yy, xx))
+        # int_im = griddata((iy, ix), Zu[valid_points], (self.yy, self.xx))
         # int_im = geo_utils.fill_holes(int_im)
         # return int_im[bbox[0]:bbox[1], bbox[2]:bbox[3]]
         return ix[valid_points]-bbox[2], iy[valid_points]-bbox[0], Zu[np.where(valid_points)], Xu, Yu, Zu
 
     def calculate_loss(self, X, Y, Z, gt):
-        # import ipdb;ipdb.set_trace()
         x_max, y_max = gt.shape[1:]
-        grid = torch.stack([torch.cuda.FloatTensor(X)/x_max, torch.cuda.FloatTensor(Y)/y_max]).transpose(1, 0).view(1, 1, -1, 2)
+        # [-1, 1]
+        grid = torch.stack([torch.cuda.FloatTensor(X)/x_max*2-1, torch.cuda.FloatTensor(Y)/y_max*2-1]).transpose(1, 0).view(1, 1, -1, 2)
         gt_height = torch.nn.functional.grid_sample(gt.unsqueeze(1), grid.cuda()).squeeze()
+        # import ipdb;ipdb.set_trace()
+
+        # xx, yy = np.meshgrid(np.arange(250), np.arange(250))
+        # input_coords = torch.stack([torch.cuda.FloatTensor(Y), torch.cuda.FloatTensor(X)])
+        # output_coords = torch.stack([torch.cuda.FloatTensor(yy), torch.cuda.FloatTensor(xx)])
+        # int_im = self.interp_method(input_coords, Z, output_coords)
+        # int_im = griddata((Y, X), Z.cpu().data.numpy(), (yy, xx))
+        # int_im = geo_utils.fill_holes(int_im)
+
+        # int_gt = griddata((Y, X), gt_height.cpu().data.numpy(), (yy, xx))
+        # int_gt = geo_utils.fill_holes(int_gt)
+
+
+        # debug_path = 'debug/loss'
+        # color_map = eval_util.getColorMapFromPalette(gt[0].cpu().data.numpy(), fire_palette)
+        # imageio.imsave(os.path.join(debug_path, 'gt.png'), color_map)
+                
+        # color_map = eval_util.getColorMapFromPalette(int_gt, fire_palette)
+        # imageio.imsave(os.path.join(debug_path, 'recon_gt.png'), color_map)
+
+        # color_map = eval_util.getColorMapFromPalette(int_im, fire_palette)
+        # imageio.imsave(os.path.join(debug_path, 'pred.png'), color_map)
         return self.L(gt_height, Z.cuda())
 
     def run(self):
@@ -127,7 +153,7 @@ class Trainer(object):
 
                     X = Variable(torch.cuda.FloatTensor([np.vstack([img_pair, np.expand_dims(pre_disp, 0)])]), requires_grad=False)
                     Y = Variable(torch.cuda.FloatTensor([y]), requires_grad=False)
-                    Disp = Variable(torch.cuda.FloatTensor(np.expand_dims(pre_disp, 0)), requires_grad=False)
+                    Disp = Variable(torch.cuda.FloatTensor(np.expand_dims(np.expand_dims(pre_disp, 0), 0)), requires_grad=False)
                     h_pair = torch.cuda.DoubleTensor(np.stack(h_pair))
                     masks = torch.tensor(masks.tolist())
                     self.optimizer.zero_grad()
