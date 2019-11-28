@@ -25,6 +25,7 @@ class Trainer(object):
         self.n_folds = args.n_folds
         self.n_epochs = args.epochs
         self.batch_size = args.batch_size
+        self.img_size = args.img_size
         self.D = FlowNetS(input_channels=3).cuda()
         # self.L = nn.MSELoss().cuda()
         self.L = nn.L1Loss().cuda()
@@ -36,10 +37,10 @@ class Trainer(object):
         np.random.shuffle(self.shuffled_index)
         self.wgs84 = pyproj.Proj('+proj=utm +zone=21 +datum=WGS84 +south')
         # self.interp_method = Interp1d()
-        self.cu1_rec, self.ru1_rec = torch.meshgrid([torch.arange(ncol), torch.arange(nrow)])
+        self.cu1_rec, self.ru1_rec = torch.meshgrid([torch.arange(self.img_size), torch.arange(self.img_size)])
         self.cu1_rec = self.cu1_rec.type(torch.cuda.DoubleTensor).transpose(1, 0)
         self.ru1_rec = self.ru1_rec.type(torch.cuda.DoubleTensor).transpose(1, 0)
-        self.xx, self.yy = np.meshgrid(np.arange(im_size[1]), np.arange(im_size[0]))
+        self.xx, self.yy = np.meshgrid(np.arange(250), np.arange(250))
 
 
     def weights_init(self, m):
@@ -174,7 +175,7 @@ class Trainer(object):
                     del X,Y,lon, lat, heights,loss
                     print("Epochs %d, iteration: %d, time = %ds, training loss: %f"%(i, j, time.time() - begin, loss_val))
                 
-                if (j+1)%1 == 0:
+                if (j+1)%5 == 0:
                     torch.save(self.D.state_dict(), os.path.join('results', self.args.exp_name, 'models', 'fold%d_%d'%(i, j)))
                 print("Fold %d, Epochs %d, time = %ds, training loss: %f"%(i, j, time.time() - begin, np.mean(train_epoch_loss)))
             
@@ -222,6 +223,7 @@ if __name__ == '__main__':
     parser.add_argument('-nf', '--n_folds', type=int, default=5, help='number of folds')
     parser.add_argument('-g', '--gpu_id', type=str, default='0', help='gpuid used for trianing')
     parser.add_argument('-m', '--model', type=str, default='plain', help='which model to be used')
+    parser.add_argument('--img_size', type=int, default=1088, help='number of folds')
     parser.add_argument('--save_train', type=bool, default=False, help='save the reconstruction results for training data')
 
     args = parser.parse_args()

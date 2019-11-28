@@ -21,10 +21,11 @@ class Trainer(object):
         self.n_folds = args.n_folds
         self.n_epochs = args.epochs
         self.batch_size = args.batch_size
+        self.img_size = args.img_size
         self.D = FlowNetS().cuda()
         # self.L = nn.MSELoss().cuda()
         self.L = nn.L1Loss().cuda()
-        self.optimizer = torch.optim.Adadelta(self.D.parameters(), lr=1e-2)
+        self.optimizer = torch.optim.Adadelta(self.D.parameters(), lr=1e-0)
         self.dataloader = dataloader
         self.n_total = len(self.dataloader)
         self.shuffled_index = np.arange(self.n_total)
@@ -32,10 +33,10 @@ class Trainer(object):
         np.random.shuffle(self.shuffled_index)
         self.wgs84 = pyproj.Proj('+proj=utm +zone=21 +datum=WGS84 +south')
         # self.interp_method = Interp1d()
-        self.cu1_rec, self.ru1_rec = torch.meshgrid([torch.arange(ncol), torch.arange(nrow)])
+        self.cu1_rec, self.ru1_rec = torch.meshgrid([torch.arange(self.img_size), torch.arange(self.img_size)])
         self.cu1_rec = self.cu1_rec.type(torch.cuda.DoubleTensor).transpose(1, 0)
         self.ru1_rec = self.ru1_rec.type(torch.cuda.DoubleTensor).transpose(1, 0)
-        self.xx, self.yy = np.meshgrid(np.arange(im_size[1]), np.arange(im_size[0]))
+        self.xx, self.yy = np.meshgrid(np.arange(250), np.arange(250))
 
 
     def weights_init(self, m):
@@ -57,7 +58,7 @@ class Trainer(object):
         y1 = (h[3]*x[0] + h[4]*x[1] + h[5]) / z
         return y0, y1
 
-    def triangulation_forward(self, disparity_map, masks, nrow, ncol, rpc_pair, h_pair, area_info):
+    def triangulation_forward(self, disparity_map, masks, rpc_pair, h_pair, area_info):
         rpc_l, rpc_r = rpc_pair
         h_left_inv, h_right_inv = h_pair
         bbox, bounds, im_size = area_info
@@ -130,7 +131,7 @@ class Trainer(object):
                     masks = torch.tensor(masks.tolist())
                     self.optimizer.zero_grad()
                     disparity_map = self.D(X)[0]
-                    lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
+                    lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, rpc_pair, h_pair, area_info)
                     # import ipdb;ipdb.set_trace()
                     print('range of predicted height: (%.3f, %.3f), ground truth: (%.3f, %.3f)'%(heights.min(), heights.max(), Y.min(), Y.max()))
                     loss = self.calculate_loss(lon, lat, heights, Y)
@@ -145,7 +146,7 @@ class Trainer(object):
                     del X,Y,lon, lat, heights,loss
                     print("Epochs %d, iteration: %d, time = %ds, training loss: %f"%(i, j, time.time() - begin, loss_val))
                 
-                if (j+1)%1 == 0:
+                if (j+1)%5 == 0:
                     torch.save(self.D.state_dict(), os.path.join('results', self.args.exp_name, 'models', 'fold%d_%d'%(i, j)))
                 print("Fold %d, Epochs %d, time = %ds, training loss: %f"%(i, j, time.time() - begin, np.mean(train_epoch_loss)))
             
@@ -164,7 +165,7 @@ class Trainer(object):
                 Y = Variable(torch.cuda.FloatTensor(y), requires_grad=False)
                 diaparity_map = self.D(X)[0]
                 # lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map[:, :, 300:400, 300:400], masks[300:400, 300:400], 100, 100, rpc_pair, h_pair, area_info)
-                lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
+                lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, rpc_pair, h_pair, area_info)
                 loss = self.calculate_loss(lon, lat, heights, Y)
                 loss_val = loss.data.cpu().numpy()
                 test_epoch_loss.append(loss_val)
@@ -190,6 +191,7 @@ if __name__ == '__main__':
     parser.add_argument('-nf', '--n_folds', type=int, default=5, help='number of folds')
     parser.add_argument('-g', '--gpu_id', type=str, default='0', help='gpuid used for trianing')
     parser.add_argument('-m', '--model', type=str, default='plain', help='which model to be used')
+    parser.add_argument('--img_size', type=int, default=1088, help='number of folds')
     parser.add_argument('--save_train', type=bool, default=False, help='save the reconstruction results for training data')
 
     args = parser.parse_args()
@@ -204,8 +206,10 @@ if __name__ == '__main__':
     data_path = '/disk/songwei/LockheedMartion/end2end/MVS/'
     kml_path = '/disk/songwei/LockheedMartion/end2end/KML/'
     gt_path = '/disk/songwei/LockheedMartion/end2end/DSM/'
-    filenames = [line.split('/')[6] for line in open('results/log.txt') if line.startswith('/disk')]
-    train_dataset= data_util.MVSdataset(gt_path, data_path, kml_path, filenames)
+    # filenames = [line.split('/')[6] for line in open('results/log.txt') if line.startswith('/disk')]
+    filenames = [line.rstrip() for line in open('debug/file_lists.txt')][-100:-20]
+    train_dataset= data_util.MVSdataset(gt_path, data_path, kml_path, args.img_size, filenames)
+    # train_dataset.save_data('results/data_small.npz')
     # train_loader = data.DataLoader(train_dataset, batch_size=1, shuffle=True)
     # import ipdb;ipdb.set_trace()
     trainer = Trainer(args, train_dataset)
