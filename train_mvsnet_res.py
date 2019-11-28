@@ -124,15 +124,17 @@ class Trainer(object):
                     else:
                         train_batch_ids = train_ids[(k+0)*self.batch_size:(k+1)*self.batch_size]
                     img_pair, masks, h_pair, rpc_pair, area_info, pre_disp, y = self.dataloader.__getitem__(train_batch_ids[0])
-                    X = Variable(torch.cuda.FloatTensor([np.stack(img_pair, pre_disp)]), requires_grad=False)
+
+                    X = Variable(torch.cuda.FloatTensor([np.vstack([img_pair, np.expand_dims(pre_disp, 0)])]), requires_grad=False)
                     Y = Variable(torch.cuda.FloatTensor([y]), requires_grad=False)
-                    Disp = Variable(torch.cuda.FloatTensor(pre_disp), requires_grad=False)
+                    Disp = Variable(torch.cuda.FloatTensor(np.expand_dims(pre_disp, 0)), requires_grad=False)
                     h_pair = torch.cuda.DoubleTensor(np.stack(h_pair))
                     masks = torch.tensor(masks.tolist())
                     self.optimizer.zero_grad()
+                    # import ipdb;ipdb.set_trace()
+                    
                     disparity_map = self.D(X)[0]+Disp
                     lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
-                    # import ipdb;ipdb.set_trace()
                     print('range of predicted height: (%.3f, %.3f), ground truth: (%.3f, %.3f)'%(heights.min(), heights.max(), Y.min(), Y.max()))
                     loss = self.calculate_loss(lon, lat, heights, Y)
                     loss_val = loss.data.cpu().numpy()
@@ -209,7 +211,6 @@ if __name__ == '__main__':
     kml_path = '/disk/songwei/LockheedMartion/end2end/KML/'
     gt_path = '/disk/songwei/LockheedMartion/end2end/DSM/'
     data_file = './results/data_small.npz'
-    filenames = [line.split('/')[6] for line in open('results/log.txt') if line.startswith('/disk')]
     train_dataset= data_util.MVSdataset_lithium(data_file)
     # train_loader = data.DataLoader(train_dataset, batch_size=1, shuffle=True)
     # import ipdb;ipdb.set_trace()

@@ -12,7 +12,7 @@ except :
 import os
 import time
 import numpy as np
-from geo_utils import open_gtiff, get_bounds_and_imsize_from_kml, rpc_to_dict, RPCModel
+from .geo_utils import open_gtiff, get_bounds_and_imsize_from_kml, rpc_to_dict, RPCModel
 import torch.utils.data as data
 
 def load_bbox(path):

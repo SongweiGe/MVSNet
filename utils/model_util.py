@@ -99,7 +99,7 @@ class FlowNetS(nn.Module):
         self.predict_flow5 = predict_flow(770)
         self.predict_flow4 = predict_flow(386)
         self.predict_flow3 = predict_flow(194)
-        self.predict_flow2 = predict_flow(68)
+        self.predict_flow2 = predict_flow(66+input_channels)
 
         self.upsampled_flow6_to_5 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)
         self.upsampled_flow5_to_4 = nn.ConvTranspose2d(2, 2, 4, 2, 1, bias=False)

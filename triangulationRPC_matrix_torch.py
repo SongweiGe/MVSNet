@@ -1,6 +1,10 @@
 import torch
 import numpy as np
-from rpcm.rpc_model import rpc_from_geotiff
+
+try:
+    from rpcm.rpc_model import rpc_from_geotiff
+except:
+    pass
 
 def RPCnormalization(undata,offset,scale):
     return (undata-offset)/scale
