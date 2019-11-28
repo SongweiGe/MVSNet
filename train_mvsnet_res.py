@@ -127,7 +127,7 @@ class Trainer(object):
 
                     X = Variable(torch.cuda.FloatTensor([np.vstack([img_pair, np.expand_dims(pre_disp, 0)])]), requires_grad=False)
                     Y = Variable(torch.cuda.FloatTensor([y]), requires_grad=False)
-                    Disp = Variable(torch.cuda.FloatTensor(np.expand_dims(pre_disp, 0)), requires_grad=False)
+                    Disp = Variable(torch.cuda.FloatTensor(np.expand_dims(np.expand_dims(pre_disp, 0), 0)), requires_grad=False)
                     h_pair = torch.cuda.DoubleTensor(np.stack(h_pair))
                     masks = torch.tensor(masks.tolist())
                     self.optimizer.zero_grad()

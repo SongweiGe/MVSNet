@@ -3,6 +3,7 @@ import time
 import pyproj
 import argparse
 import numpy as np
+import imageio
 import scipy.misc
 from scipy.interpolate import griddata
 
@@ -60,13 +61,13 @@ class Predictor(object):
         cu1 = cu1[masks].reshape(-1)
         ru2 = ru2[masks].reshape(-1)
         cu2 = cu2[masks].reshape(-1)
-        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1[:600000], cu1[:600000], ru2[:600000], cu2[:600000], rpc_l, rpc_r, verbose=False, inverse_bs=1000)
+        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc_l, rpc_r, verbose=False, inverse_bs=1000)
 
         xx, yy = np.meshgrid(np.arange(im_size[1]), np.arange(im_size[0]))
         lons, lats = self.wgs84(Xu.cpu().data.numpy(), Yu.cpu().data.numpy())
         ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
         valid_points = np.logical_and(np.logical_and(iy>bbox[0], iy<bbox[0]+250), np.logical_and(ix>bbox[2], ix<bbox[2]+250))
-        int_im = griddata((iy[valid_points], ix[valid_points]), Zu[np.where(valid_points)].cpu().data.numpy(), (yy, xx))
+        int_im = griddata((iy, ix), Zu.cpu().data.numpy(), (yy, xx))
         int_im = geo_utils.fill_holes(int_im)
         return int_im[bbox[0]:bbox[0]+250, bbox[2]:bbox[2]+250], int_im, ix[valid_points]-bbox[2], iy[valid_points]-bbox[0], Zu[np.where(valid_points)]
 
@@ -77,12 +78,27 @@ class Predictor(object):
         return self.L(gt_height, Z.cuda())
 
     def forward(self, sample):
-        img_pair, masks, h_pair, rpc_pair, area_info, y = sample
+        img_pair, masks, h_pair, rpc_pair, area_info, _, y = sample
         X = Variable(torch.cuda.FloatTensor([img_pair]), requires_grad=False)
         Y = Variable(torch.cuda.FloatTensor([y]), requires_grad=False)
         h_pair = torch.cuda.DoubleTensor(np.stack(h_pair))
         masks = torch.tensor(masks.tolist())
         disparity_map = self.D(X)[0]
+        height_map, height_map_all, lon, lat, heights = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
+        loss = self.calculate_loss(lon, lat, heights, Y)
+        return disparity_map, height_map, height_map_all, loss
+
+    def forward_res(self, sample):
+        img_pair, masks, h_pair, rpc_pair, area_info, pre_disp, y = sample
+        X = Variable(torch.cuda.FloatTensor([np.vstack([img_pair, np.expand_dims(pre_disp, 0)])]), requires_grad=False)
+        Y = Variable(torch.cuda.FloatTensor([y]), requires_grad=False)
+        Disp = Variable(torch.cuda.FloatTensor(np.expand_dims(np.expand_dims(pre_disp, 0), 0)), requires_grad=False)
+        h_pair = torch.cuda.DoubleTensor(np.stack(h_pair))
+        masks = torch.tensor(masks.tolist())
+
+        # disparity_map = self.D(X)[0]
+        # disparity_map = self.D(X)[0]+Disp
+        disparity_map = Disp
         height_map, height_map_all, lon, lat, heights = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
         loss = self.calculate_loss(lon, lat, heights, Y)
         return disparity_map, height_map, height_map_all, loss
@@ -106,7 +122,7 @@ if __name__ == '__main__':
     debug_path = './debug/end2end_%d'%args.input_epoch
     if not os.path.exists(debug_path):
         os.mkdir(debug_path)
-    fire_palette = scipy.misc.imread('./image/fire_palette.png')[0][:, 0:3]
+    fire_palette = imageio.imread('./image/fire_palette.png')[0][:, 0:3]
     fw = open(os.path.join(debug_path, 'log%d.txt'%args.input_epoch), 'w')
 
     rsmes = []
@@ -118,17 +134,19 @@ if __name__ == '__main__':
     data_path = '/disk/songwei/LockheedMartion/end2end/MVS/'
     kml_path = '/disk/songwei/LockheedMartion/end2end/KML/'
     gt_path = '/disk/songwei/LockheedMartion/end2end/DSM/'
-    filenames = [line.split('/')[6] for line in open('./log.txt') if line.startswith('/disk')]
-    test_dataset= data_util.MVSdataset(gt_path, data_path, kml_path, filenames)
+    data_file = './results/data_small.npz'
+    test_dataset= data_util.MVSdataset_lithium(data_file)
+    filenames = [line.split('/')[6] for line in open('debug/log.txt') if line.startswith('/disk')]
+    # test_dataset= data_util.MVSdataset(gt_path, data_path, kml_path, filenames)
     Predictor = Predictor(args)
-    Predictor.D.load_state_dict(torch.load(os.path.join('./results', args.exp_name, 'models', 'fold%s_%d'%(args.input_fold, args.input_epoch))))
+    # Predictor.D.load_state_dict(torch.load(os.path.join('./results', args.exp_name, 'models', 'fold%s_%d'%(args.input_fold, args.input_epoch))))
 
     # import ipdb;ipdb.set_trace()
 
-    for i in range(len(filenames)):
+    for i in range(len(test_dataset)):
         sample = test_dataset.__getitem__(i)
-        bbox = sample[-2][0]
-        dmap, hmap, hmap_all, loss = Predictor.forward(sample)
+        bbox = sample[-3][0]
+        dmap, hmap, hmap_all, loss = Predictor.forward_res(sample)
         left_img = sample[0][0]
         gt_data = sample[-1]
         rsme, acc, com, l1e = eval_util.evaluate(hmap, gt_data)
@@ -139,18 +157,18 @@ if __name__ == '__main__':
         fw.write('The errors for asp are: loss = %.4f, rsme = %.4f, acc = %.4f, com = %.4f, l1e = %.4f\n'%(loss.cpu().data, rsme, acc, com, l1e))
 
         # left_img = geo_utils.open_gtiff(os.path.join(data_path, filenames[i], 'cropped_images', '02APR15WV031000015APR02134718-P1BS-500497282050_01_P001_________AAE_0AAAAABPABJ0.NTF.tif'))
-        # scipy.misc.imsave(os.path.join(debug_path, filenames[i]+'_leftimg.png'), left_img[bbox[0]:bbox[1], bbox[2]:bbox[3]])
+        # imageio.imsave(os.path.join(debug_path, filenames[i]+'_leftimg.png'), left_img[bbox[0]:bbox[1], bbox[2]:bbox[3]])
 
-        scipy.misc.imsave(os.path.join(debug_path, filenames[i]+'_disp.png'), dmap[0, 0].cpu().data.numpy())
+        imageio.imsave(os.path.join(debug_path, filenames[i]+'_disp.png'), dmap[0, 0].cpu().data.numpy())
         color_map = eval_util.getColorMapFromPalette(dmap[0, 0].cpu().data.numpy(), fire_palette)
-        scipy.misc.imsave(os.path.join(debug_path, filenames[i]+'_disp_color.png'), color_map)
-        scipy.misc.imsave(os.path.join(debug_path, filenames[i]+'_left.png'), left_img)
+        imageio.imsave(os.path.join(debug_path, filenames[i]+'_disp_color.png'), color_map)
+        imageio.imsave(os.path.join(debug_path, filenames[i]+'_left.png'), left_img)
         color_map = eval_util.getColorMapFromPalette(hmap, fire_palette)
-        scipy.misc.imsave(os.path.join(debug_path, filenames[i]+'_height.png'), color_map)
+        imageio.imsave(os.path.join(debug_path, filenames[i]+'_height.png'), color_map)
         color_map = eval_util.getColorMapFromPalette(hmap_all, fire_palette)
-        scipy.misc.imsave(os.path.join(debug_path, filenames[i]+'_height_all.png'), color_map)
+        imageio.imsave(os.path.join(debug_path, filenames[i]+'_height_all.png'), color_map)
         color_map = eval_util.getColorMapFromPalette(gt_data, fire_palette)
-        scipy.misc.imsave(os.path.join(debug_path, filenames[i]+'_gt.png'), color_map)
+        imageio.imsave(os.path.join(debug_path, filenames[i]+'_gt.png'), color_map)
 
         del dmap, hmap, hmap_all, loss, sample
 
