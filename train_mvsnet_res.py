@@ -21,7 +21,7 @@ class Trainer(object):
         self.n_folds = args.n_folds
         self.n_epochs = args.epochs
         self.batch_size = args.batch_size
-        self.D = FlowNetS().cuda()
+        self.D = FlowNetS(input_channels=3).cuda()
         # self.L = nn.MSELoss().cuda()
         self.L = nn.L1Loss().cuda()
         self.optimizer = torch.optim.Adadelta(self.D.parameters(), lr=1e-2)
@@ -109,8 +109,8 @@ class Trainer(object):
             # import ipdb;ipdb.set_trace()
             n_batch = train_ids.shape[0]//self.batch_size-1
             n_test_batch = test_ids.shape[0]//self.batch_size-1
-            # for p in self.D.parameters():
-            #     self.weights_init(p)
+            for p in self.D.parameters():
+                self.weights_init(p)
             for j in range(self.n_epochs):
                 np.random.shuffle(train_ids)
                 begin = time.time()
@@ -123,13 +123,14 @@ class Trainer(object):
                         train_batch_ids = train_ids[k*self.batch_size:]
                     else:
                         train_batch_ids = train_ids[(k+0)*self.batch_size:(k+1)*self.batch_size]
-                    img_pair, masks, h_pair, rpc_pair, area_info, _, y = self.dataloader.__getitem__(train_batch_ids[0])
-                    X = Variable(torch.cuda.FloatTensor([img_pair]), requires_grad=False)
+                    img_pair, masks, h_pair, rpc_pair, area_info, pre_disp, y = self.dataloader.__getitem__(train_batch_ids[0])
+                    X = Variable(torch.cuda.FloatTensor([np.stack(img_pair, pre_disp)]), requires_grad=False)
                     Y = Variable(torch.cuda.FloatTensor([y]), requires_grad=False)
+                    Disp = Variable(torch.cuda.FloatTensor(pre_disp), requires_grad=False)
                     h_pair = torch.cuda.DoubleTensor(np.stack(h_pair))
                     masks = torch.tensor(masks.tolist())
                     self.optimizer.zero_grad()
-                    disparity_map = self.D(X)[0]
+                    disparity_map = self.D(X)[0]+Disp
                     lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
                     # import ipdb;ipdb.set_trace()
                     print('range of predicted height: (%.3f, %.3f), ground truth: (%.3f, %.3f)'%(heights.min(), heights.max(), Y.min(), Y.max()))
@@ -159,10 +160,13 @@ class Trainer(object):
                     test_batch_ids = test_ids[k*self.batch_size:]
                 else:
                     test_batch_ids = test_ids[k*self.batch_size:(k+1)*self.batch_size]
-                img_pair, h_pair, rpc_pair, area_info, _, y = self.dataloader.__getitem__(train_batch_ids[0])
-                X = Variable(torch.cuda.FloatTensor(img_pair), requires_grad=False)
-                Y = Variable(torch.cuda.FloatTensor(y), requires_grad=False)
-                diaparity_map = self.D(X)[0]
+                img_pair, masks, h_pair, rpc_pair, area_info, pre_disp, y = self.dataloader.__getitem__(train_batch_ids[0])
+                X = Variable(torch.cuda.FloatTensor([np.stack(img_pair, pre_disp)]), requires_grad=False)
+                Y = Variable(torch.cuda.FloatTensor([y]), requires_grad=False)
+                Disp = Variable(torch.cuda.FloatTensor(pre_disp), requires_grad=False)
+                h_pair = torch.cuda.DoubleTensor(np.stack(h_pair))
+                masks = torch.tensor(masks.tolist())
+                disparity_map = self.D(X)[0]+Disp
                 # lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map[:, :, 300:400, 300:400], masks[300:400, 300:400], 100, 100, rpc_pair, h_pair, area_info)
                 lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
                 loss = self.calculate_loss(lon, lat, heights, Y)
@@ -204,8 +208,9 @@ if __name__ == '__main__':
     data_path = '/disk/songwei/LockheedMartion/end2end/MVS/'
     kml_path = '/disk/songwei/LockheedMartion/end2end/KML/'
     gt_path = '/disk/songwei/LockheedMartion/end2end/DSM/'
+    data_file = './results/data_small.npz'
     filenames = [line.split('/')[6] for line in open('results/log.txt') if line.startswith('/disk')]
-    train_dataset= data_util.MVSdataset(gt_path, data_path, kml_path, filenames)
+    train_dataset= data_util.MVSdataset_lithium(data_file)
     # train_loader = data.DataLoader(train_dataset, batch_size=1, shuffle=True)
     # import ipdb;ipdb.set_trace()
     trainer = Trainer(args, train_dataset)

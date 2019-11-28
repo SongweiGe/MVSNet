@@ -41,28 +41,8 @@ def invert_homography(i):
     o[8] = (i[0]*i[4] - i[1]*i[3]) / det
     return o
 
-# load input sets and ground truth
-def load_data(gt_path, data_path, kml_path):
-    # load input data
-    AllX = []
-    Ally = []
-    filenames = os.listdir(data_path)
-    # N x P x W x H x 2
-    begin_time = time.time()
-    print('start to load data')
-    for filename in filenames:
-        # if len(os.listdir(os.path.join(data_path, filename, 'stereo'))) < 10:
-        #     continue
-        img_left, img_right, rpc_l, rpc_r, h_l, h_r, bbox, bounds, im_size, height_gt = load_folder(tmp_path=os.path.join(data_path, filename), 
-                    kml_file=os.path.join(kml_path, filename+'.kml'), gt_path=os.path.join(gt_path, filename+'.npy'), mode='train')
-        AllX.append([img_left, img_right, rpc_l, rpc_r, h_l, h_r, bbox, bounds, im_size])
-        Ally.append(height_gt)
-    print('it took %.2fs to load data'%(time.time()-begin_time))
-    return AllX, Ally
-
-
 # load data from given file folder
-def load_folder(tmp_path, kml_file, gt_path=None, mode='train'):
+def load_folder(tmp_path, kml_file, gt_path=None, mode='train', disp=False):
     # load input data
     stereo_path = os.path.join(tmp_path, 'stereo/0')
     img_path = os.path.join(tmp_path, 'cropped_images')
@@ -99,12 +79,19 @@ def load_folder(tmp_path, kml_file, gt_path=None, mode='train'):
     # load kml info
     bounds, im_size = get_bounds_and_imsize_from_kml(kml_file, 0.3)
 
+    # load asp disparity map if True
+    if disp:
+        disp_file = os.path.join(stereo_path, 'out-F.tif')
+        disparity_map = open_gtiff(disp_file, np.float32)[0, :, :]
+    else:
+        disparity_map = None
+
     if mode == 'train':
         # load ground truth
         height_gt = np.load(os.path.join(gt_path))
-        return data_left, data_right, rpc_l, rpc_r, h_left_inv, h_right_inv, bbox, bounds, im_size, height_gt
+        return data_left, data_right, rpc_l, rpc_r, h_left_inv, h_right_inv, bbox, bounds, im_size, height_gt, disparity_map
     else:
-        return data_left, data_right, rpc_l, rpc_r, h_left_inv, h_right_inv, bbox, bounds, im_size
+        return data_left, data_right, rpc_l, rpc_r, h_left_inv, h_right_inv, bbox, bounds, im_size, disparity_map
 
 class MVSdataset(data.Dataset):
     def __init__(self, gt_path, data_path, kml_path, filenames=None):
@@ -115,6 +102,7 @@ class MVSdataset(data.Dataset):
         self.area_info = []
         self.left_masks = []
         self.Ally = []
+        self.pre_disps = []
         if filenames is None:
             filenames = os.listdir(data_path)
         # N x P x W x H x 2
@@ -123,28 +111,30 @@ class MVSdataset(data.Dataset):
         for filename in filenames:
             if len(os.listdir(os.path.join(data_path, filename, 'stereo'))) < 1:
                 continue
-            img_left, img_right, rpc_l, rpc_r, h_l, h_r, bbox, bounds, im_size, height_gt = load_folder(tmp_path=os.path.join(data_path, filename), 
-                        kml_file=os.path.join(kml_path, filename+'.kml'), gt_path=os.path.join(gt_path, filename+'.npy'), mode='train')
+            img_left, img_right, rpc_l, rpc_r, h_l, h_r, bbox, bounds, im_size, height_gt, disp = load_folder(tmp_path=os.path.join(data_path, filename), 
+                        kml_file=os.path.join(kml_path, filename+'.kml'), gt_path=os.path.join(gt_path, filename+'.npy'), mode='train', disp=True)
             # import ipdb;ipdb.set_trace()
             img_left = np.pad(img_left, [[0, 1088-img_left.shape[0]], [0, 1088-img_left.shape[1]]], 'constant', constant_values=(0, 0))
             img_right = np.pad(img_right, [[0, 1088-img_right.shape[0]], [0, 1088-img_right.shape[1]]], 'constant', constant_values=(0, 0))
+            disp = np.pad(disp, [[0, 1088-disp.shape[0]], [0, 1088-disp.shape[1]]], 'constant', constant_values=(0, 0))
             self.left_masks.append(img_left>0)
             self.img_pair.append(np.stack([img_left, img_right]))
             self.h_pair.append([h_l, h_r])
             self.rpc_pair.append([rpc_l, rpc_r])
             self.area_info.append([bbox, bounds, im_size])
             self.Ally.append(height_gt[:250, :250])
+            self.pre_disps.append(disp)
         print('it took %.2fs to load data'%(time.time()-begin_time))
 
     def __getitem__(self, index):
-        return self.img_pair[index], self.left_masks[index], self.h_pair[index], self.rpc_pair[index], self.area_info[index], self.Ally[index]
+        return self.img_pair[index], self.left_masks[index], self.h_pair[index], self.rpc_pair[index], self.area_info[index], self.pre_disps[index], self.Ally[index]
 
     def __len__(self):
         return len(self.h_pair)
 
     def save_data(self, filename='results/data_all.npz'):
         rpc_dict_pair = [[rpc_to_dict(item[0]), rpc_to_dict(item[1])] for item in self.rpc_pair]
-        np.savez(filename, masks=self.left_masks, images=self.img_pair, hs=self.h_pair, rpcs=rpc_dict_pair, area_infos=self.area_info, ys=self.Ally)
+        np.savez(filename, masks=test_dataset.left_masks, images=test_dataset.img_pair, hs=test_dataset.h_pair, rpcs=rpc_dict_pair, area_infos=test_dataset.area_info, disps=test_dataset.pre_disps, ys=test_dataset.Ally)
         data = np.load(filename, allow_pickle=True)
 
 
@@ -158,10 +148,11 @@ class MVSdataset_lithium(data.Dataset):
         self.h_pair = data['hs']
         self.area_info = data['area_infos']
         self.left_masks = data['masks']
+        self.pre_disps = data['disps']
         self.Ally = data['ys']
         print('it took %.2fs to load data'%(time.time()-begin_time))
     def __getitem__(self, index):
-        return self.img_pair[index], self.left_masks[index], self.h_pair[index], self.rpc_pair[index], self.area_info[index], self.Ally[index]
+        return self.img_pair[index], self.left_masks[index], self.h_pair[index], self.rpc_pair[index], self.area_info[index], self.pre_disps[index], self.Ally[index]
     def __len__(self):
         return len(self.h_pair)
 
