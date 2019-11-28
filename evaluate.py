@@ -61,7 +61,7 @@ class Predictor(object):
         cu1 = cu1[masks].reshape(-1)
         ru2 = ru2[masks].reshape(-1)
         cu2 = cu2[masks].reshape(-1)
-        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc_l, rpc_r, verbose=False, inverse_bs=1000)
+        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1[:600000], cu1[:600000], ru2[:600000], cu2[:600000], rpc_l, rpc_r, verbose=False, inverse_bs=1000)
 
         xx, yy = np.meshgrid(np.arange(im_size[1]), np.arange(im_size[0]))
         lons, lats = self.wgs84(Xu.cpu().data.numpy(), Yu.cpu().data.numpy())
@@ -136,7 +136,8 @@ if __name__ == '__main__':
     gt_path = '/disk/songwei/LockheedMartion/end2end/DSM/'
     data_file = './results/data_small.npz'
     test_dataset= data_util.MVSdataset_lithium(data_file)
-    filenames = [line.split('/')[6] for line in open('debug/log.txt') if line.startswith('/disk')]
+    filenames = [line.rstrip() for line in open('debug/file_lists.txt')][-100:-20]
+    # filenames = [line.split('/')[6] for line in open('debug/log.txt') if line.startswith('/disk')]
     # test_dataset= data_util.MVSdataset(gt_path, data_path, kml_path, filenames)
     Predictor = Predictor(args)
     # Predictor.D.load_state_dict(torch.load(os.path.join('./results', args.exp_name, 'models', 'fold%s_%d'%(args.input_fold, args.input_epoch))))

@@ -39,7 +39,7 @@ class Trainer(object):
         self.xx, self.yy = np.meshgrid(np.arange(250), np.arange(250))
 
 
-    # def weights_init(self, m):
+    def weights_init(self, m):
         try:
             m.weight.data.normal_(0, 1)
             m.bias.data.zero_()
