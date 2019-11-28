@@ -1,5 +1,6 @@
 import os
 import time
+import imageio
 import pyproj
 import argparse
 import numpy as np
@@ -10,10 +11,13 @@ from torch.autograd import Variable
 
 import utils.data_util as data_util
 from utils.model_util import FlowNetS
+from scipy.interpolate import griddata
 
-from utils import geo_utils
+from utils import geo_utils, eval_util
 from triangulationRPC_matrix_torch import triangulationRPC_matrix
 # from torchinterp1d import Interp1d
+
+fire_palette = imageio.imread('./image/fire_palette.png')[0][:, 0:3]
 
 class Trainer(object):
     def __init__(self, args, dataloader):
@@ -86,10 +90,32 @@ class Trainer(object):
         return ix[valid_points]-bbox[2], iy[valid_points]-bbox[0], Zu[np.where(valid_points)], Xu, Yu, Zu
 
     def calculate_loss(self, X, Y, Z, gt):
-        # import ipdb;ipdb.set_trace()
         x_max, y_max = gt.shape[1:]
-        grid = torch.stack([torch.cuda.FloatTensor(X)/x_max, torch.cuda.FloatTensor(Y)/y_max]).transpose(1, 0).view(1, 1, -1, 2)
+        # [-1, 1]
+        grid = torch.stack([torch.cuda.FloatTensor(X)/x_max*2-1, torch.cuda.FloatTensor(Y)/y_max*2-1]).transpose(1, 0).view(1, 1, -1, 2)
         gt_height = torch.nn.functional.grid_sample(gt.unsqueeze(1), grid.cuda()).squeeze()
+        # import ipdb;ipdb.set_trace()
+
+        # xx, yy = np.meshgrid(np.arange(250), np.arange(250))
+        # input_coords = torch.stack([torch.cuda.FloatTensor(Y), torch.cuda.FloatTensor(X)])
+        # output_coords = torch.stack([torch.cuda.FloatTensor(yy), torch.cuda.FloatTensor(xx)])
+        # int_im = self.interp_method(input_coords, Z, output_coords)
+        # int_im = griddata((Y, X), Z.cpu().data.numpy(), (yy, xx))
+        # int_im = geo_utils.fill_holes(int_im)
+
+        # int_gt = griddata((Y, X), gt_height.cpu().data.numpy(), (yy, xx))
+        # int_gt = geo_utils.fill_holes(int_gt)
+
+
+        # debug_path = 'debug/loss'
+        # color_map = eval_util.getColorMapFromPalette(gt[0].cpu().data.numpy(), fire_palette)
+        # imageio.imsave(os.path.join(debug_path, 'gt.png'), color_map)
+                
+        # color_map = eval_util.getColorMapFromPalette(int_gt, fire_palette)
+        # imageio.imsave(os.path.join(debug_path, 'recon_gt.png'), color_map)
+
+        # color_map = eval_util.getColorMapFromPalette(int_im, fire_palette)
+        # imageio.imsave(os.path.join(debug_path, 'pred.png'), color_map)
         return self.L(gt_height, Z.cuda())
 
     def run(self):

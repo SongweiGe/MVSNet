@@ -88,7 +88,7 @@ class Trainer(object):
     def calculate_loss(self, X, Y, Z, gt):
         # import ipdb;ipdb.set_trace()
         x_max, y_max = gt.shape[1:]
-        grid = torch.stack([torch.cuda.FloatTensor(X)/x_max, torch.cuda.FloatTensor(Y)/y_max]).transpose(1, 0).view(1, 1, -1, 2)
+        grid = torch.stack([torch.cuda.FloatTensor(X)/x_max*2-1, torch.cuda.FloatTensor(Y)/y_max*2-1]).transpose(1, 0).view(1, 1, -1, 2)
         gt_height = torch.nn.functional.grid_sample(gt.unsqueeze(1), grid.cuda()).squeeze()
         return self.L(gt_height, Z.cuda())
 
