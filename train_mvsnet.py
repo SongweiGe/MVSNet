@@ -39,7 +39,7 @@ class Trainer(object):
         self.xx, self.yy = np.meshgrid(np.arange(250), np.arange(250))
 
 
-    def weights_init(self, m):
+    # def weights_init(self, m):
         try:
             m.weight.data.normal_(0, 1)
             m.bias.data.zero_()
@@ -110,8 +110,8 @@ class Trainer(object):
             # import ipdb;ipdb.set_trace()
             n_batch = train_ids.shape[0]//self.batch_size-1
             n_test_batch = test_ids.shape[0]//self.batch_size-1
-            # for p in self.D.parameters():
-            #     self.weights_init(p)
+            for p in self.D.parameters():
+                self.weights_init(p)
             for j in range(self.n_epochs):
                 np.random.shuffle(train_ids)
                 begin = time.time()
