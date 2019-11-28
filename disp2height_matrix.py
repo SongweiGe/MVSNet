@@ -67,15 +67,16 @@ base_path = '/disk/songwei/LockheedMartion/end2end/'
 mvs_path = os.path.join(base_path, 'MVS')
 kml_path = os.path.join(base_path, 'KML')
 gt_path = os.path.join(base_path, 'DSM')
-filenames = os.listdir(mvs_path)
+# filenames = os.listdir(mvs_path)
+filenames = [line.split('/')[6] for line in open('./log.txt') if line.startswith('/disk')]
 
 rsmes = [[], []]
 accs = [[], []]
 coms = [[], []]
 l1es = [[], []]
 
-for niter in range(1):
-    fw = open('debug/log%d.txt'%niter, 'w')
+for niter in range(1, 2):
+    fw = open('debug/triangulations/log%d.txt'%niter, 'w')
     for filename in filenames:
         fw.write(filename+'\n')
         tmp_path = os.path.join(mvs_path, filename)

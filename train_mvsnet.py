@@ -13,26 +13,25 @@ from utils.model_util import FlowNetS
 
 from utils import geo_utils
 from triangulationRPC_matrix_torch import triangulationRPC_matrix
-from torchinterp1d import Interp1d
+# from torchinterp1d import Interp1d
 
 class Trainer(object):
-    """docstring for Trainer"""
     def __init__(self, args, dataloader):
         self.args = args
         self.n_folds = args.n_folds
         self.n_epochs = args.epochs
         self.batch_size = args.batch_size
         self.D = FlowNetS().cuda()
-        self.L = nn.MSELoss().cuda()
-        # self.L = nn.L1Loss().cuda()
-        self.optimizer = torch.optim.Adadelta(self.D.parameters(), lr=1e-0)
+        # self.L = nn.MSELoss().cuda()
+        self.L = nn.L1Loss().cuda()
+        self.optimizer = torch.optim.Adadelta(self.D.parameters(), lr=1e-2)
         self.dataloader = dataloader
         self.n_total = len(self.dataloader)
         self.shuffled_index = np.arange(self.n_total)
         np.random.seed(2019)
         np.random.shuffle(self.shuffled_index)
         self.wgs84 = pyproj.Proj('+proj=utm +zone=21 +datum=WGS84 +south')
-        self.interp_method = Interp1d()
+        # self.interp_method = Interp1d()
 
 
     def weights_init(self, m):
@@ -72,12 +71,12 @@ class Trainer(object):
         ru2 = ru2[masks].reshape(-1)
         cu2 = cu2[masks].reshape(-1)
         # import ipdb;ipdb.set_trace()
-        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc_l, rpc_r, verbose=False, inverse_bs=1000)
+        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1[:630000], cu1[:630000], ru2[:630000], cu2[:630000], rpc_l, rpc_r, verbose=False, inverse_bs=1000)
 
         xx, yy = np.meshgrid(np.arange(im_size[1]), np.arange(im_size[0]))
         lons, lats = self.wgs84(Xu.cpu().data.numpy(), Yu.cpu().data.numpy())
         ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
-        valid_points = np.logical_and(np.logical_and(iy>bbox[0], iy<bbox[1]), np.logical_and(ix>bbox[2], ix<bbox[3]))
+        valid_points = np.logical_and(np.logical_and(iy>bbox[0], iy<bbox[0]+250), np.logical_and(ix>bbox[2], ix<bbox[2]+250))
         # input_coords = torch.stack([torch.cuda.FloatTensor(iy), torch.cuda.FloatTensor(ix)])
         # output_coords = torch.stack([torch.cuda.FloatTensor(yy), torch.cuda.FloatTensor(xx)])
         # int_im = self.interp_method(input_coords, Zu[valid_points], output_coords)
@@ -88,7 +87,8 @@ class Trainer(object):
 
     def calculate_loss(self, X, Y, Z, gt):
         # import ipdb;ipdb.set_trace()
-        grid = torch.stack([torch.cuda.FloatTensor(X), torch.cuda.FloatTensor(Y)]).transpose(1, 0).view(1, 1, -1, 2)
+        x_max, y_max = gt.shape[1:]
+        grid = torch.stack([torch.cuda.FloatTensor(X)/x_max, torch.cuda.FloatTensor(Y)/y_max]).transpose(1, 0).view(1, 1, -1, 2)
         gt_height = torch.nn.functional.grid_sample(gt.unsqueeze(1), grid.cuda()).squeeze()
         return self.L(gt_height, Z.cuda())
 
@@ -132,6 +132,7 @@ class Trainer(object):
                     disparity_map = self.D(X)[0]
                     lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
                     # import ipdb;ipdb.set_trace()
+                    print('range of predicted height: (%.3f, %.3f), ground truth: (%.3f, %.3f)'%(heights.min(), heights.max(), Y.min(), Y.max()))
                     loss = self.calculate_loss(lon, lat, heights, Y)
                     loss_val = loss.data.cpu().numpy()
                     print('The number of remaining points:%d'%len(lon))
@@ -203,7 +204,8 @@ if __name__ == '__main__':
     data_path = '/disk/songwei/LockheedMartion/end2end/MVS/'
     kml_path = '/disk/songwei/LockheedMartion/end2end/KML/'
     gt_path = '/disk/songwei/LockheedMartion/end2end/DSM/'
-    train_dataset= data_util.MVSdataset(gt_path, data_path, kml_path)
+    filenames = [line.split('/')[6] for line in open('results/log.txt') if line.startswith('/disk')]
+    train_dataset= data_util.MVSdataset(gt_path, data_path, kml_path, filenames)
     # train_loader = data.DataLoader(train_dataset, batch_size=1, shuffle=True)
     # import ipdb;ipdb.set_trace()
     trainer = Trainer(args, train_dataset)

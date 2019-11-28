@@ -107,7 +107,7 @@ def load_folder(tmp_path, kml_file, gt_path=None, mode='train'):
         return data_left, data_right, rpc_l, rpc_r, h_left_inv, h_right_inv, bbox, bounds, im_size
 
 class MVSdataset(data.Dataset):
-    def __init__(self, gt_path, data_path, kml_path):
+    def __init__(self, gt_path, data_path, kml_path, filenames=None):
         # load input data
         self.img_pair = []
         self.rpc_pair = []
@@ -115,7 +115,8 @@ class MVSdataset(data.Dataset):
         self.area_info = []
         self.left_masks = []
         self.Ally = []
-        filenames = os.listdir(data_path)
+        if filenames is None:
+            filenames = os.listdir(data_path)
         # N x P x W x H x 2
         begin_time = time.time()
         print('start to load data')
@@ -125,8 +126,8 @@ class MVSdataset(data.Dataset):
             img_left, img_right, rpc_l, rpc_r, h_l, h_r, bbox, bounds, im_size, height_gt = load_folder(tmp_path=os.path.join(data_path, filename), 
                         kml_file=os.path.join(kml_path, filename+'.kml'), gt_path=os.path.join(gt_path, filename+'.npy'), mode='train')
             # import ipdb;ipdb.set_trace()
-            img_left = np.pad(img_left, [[0, 1280-img_left.shape[0]], [0, 1280-img_left.shape[1]]], 'constant', constant_values=(0, 0))
-            img_right = np.pad(img_right, [[0, 1280-img_right.shape[0]], [0, 1280-img_right.shape[1]]], 'constant', constant_values=(0, 0))
+            img_left = np.pad(img_left, [[0, 1088-img_left.shape[0]], [0, 1088-img_left.shape[1]]], 'constant', constant_values=(0, 0))
+            img_right = np.pad(img_right, [[0, 1088-img_right.shape[0]], [0, 1088-img_right.shape[1]]], 'constant', constant_values=(0, 0))
             self.left_masks.append(img_left>0)
             self.img_pair.append(np.stack([img_left, img_right]))
             self.h_pair.append([h_l, h_r])
