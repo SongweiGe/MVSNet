@@ -144,7 +144,7 @@ if __name__ == '__main__':
     # filenames = [line.split('/')[6] for line in open('debug/log.txt') if line.startswith('/disk')]
     # test_dataset= data_util.MVSdataset(gt_path, data_path, kml_path, filenames)
     Predictor = Predictor(args)
-    # Predictor.D.load_state_dict(torch.load(os.path.join('./results', args.exp_name, 'models', 'fold%s_%d'%(args.input_fold, args.input_epoch))))
+    Predictor.D.load_state_dict(torch.load(os.path.join('./results', args.exp_name, 'models', 'fold%s_%d'%(args.input_fold, args.input_epoch))))
 
     # import ipdb;ipdb.set_trace()
 

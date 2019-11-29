@@ -224,6 +224,7 @@ if __name__ == '__main__':
     # filenames = [line.split('/')[6] for line in open('results/log.txt') if line.startswith('/disk')]
     filenames = [line.rstrip() for line in open('debug/file_lists.txt')][-100:-20]
     # train_dataset= data_util.MVSdataset(gt_path, data_path, kml_path, args.img_size, filenames)
+    data_file = './results/data_small.npz'
     train_dataset= data_util.MVSdataset_lithium(data_file)
     # train_dataset.save_data('results/data_small.npz')
     # train_loader = data.DataLoader(train_dataset, batch_size=1, shuffle=True)
@@ -231,5 +232,5 @@ if __name__ == '__main__':
     trainer = Trainer(args, train_dataset)
     if args.load_model:
         print('loading pretrained model from epoch %d'%args.input_epoch)
-        trainer.D.load_state_dict(torch.load(os.path.join('../results', args.exp_name, 'models', '%s_%d'%(args.input_fold, args.input_epoch))))
+        trainer.D.load_state_dict(torch.load(os.path.join('./results', args.exp_name, 'models', 'fold%s_%d'%(args.input_fold, args.input_epoch))))
     trainer.run()
