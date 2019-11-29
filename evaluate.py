@@ -20,7 +20,10 @@ from triangulationRPC_matrix_torch import triangulationRPC_matrix
 
 class Predictor(object):
     def __init__(self, args):
-        self.D = FlowNetS().cuda()
+        if args.res:
+            self.D = FlowNetS(input_channels=3).cuda()
+        else:
+            self.D = FlowNetS().cuda()
         self.wgs84 = pyproj.Proj('+proj=utm +zone=21 +datum=WGS84 +south')
         self.L = nn.L1Loss().cuda()
 
@@ -97,8 +100,8 @@ class Predictor(object):
         masks = torch.tensor(masks.tolist())
 
         # disparity_map = self.D(X)[0]
-        # disparity_map = self.D(X)[0]+Disp
-        disparity_map = Disp
+        disparity_map = self.D(X)[0]+Disp
+        # disparity_map = Disp
         height_map, height_map_all, lon, lat, heights = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
         loss = self.calculate_loss(lon, lat, heights, Y)
         return disparity_map, height_map, height_map_all, loss
@@ -113,6 +116,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=1, help='Batch size during training per GPU')
     parser.add_argument('-s', '--seed', type=int, default=0, help='random seed for generating data')
     parser.add_argument('-nf', '--n_folds', type=int, default=5, help='number of folds')
+    parser.add_argument('-r', '--res', type=int, default=0, help='residual or not')
     parser.add_argument('-g', '--gpu_id', type=str, default='1', help='gpuid used for trianing')
     parser.add_argument('-m', '--model', type=str, default='plain', help='which model to be used')
     parser.add_argument('--save_train', type=bool, default=False, help='save the reconstruction results for training data')
@@ -147,7 +151,10 @@ if __name__ == '__main__':
     for i in range(len(test_dataset)):
         sample = test_dataset.__getitem__(i)
         bbox = sample[-3][0]
-        dmap, hmap, hmap_all, loss = Predictor.forward_res(sample)
+        if args.res:
+            dmap, hmap, hmap_all, loss = Predictor.forward_res(sample)
+        else:
+            dmap, hmap, hmap_all, loss = Predictor.forward(sample)
         left_img = sample[0][0]
         gt_data = sample[-1]
         rsme, acc, com, l1e = eval_util.evaluate(hmap, gt_data)
