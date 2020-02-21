@@ -72,7 +72,7 @@ class Predictor(object):
         valid_points = np.logical_and(np.logical_and(iy>bbox[0], iy<bbox[0]+250), np.logical_and(ix>bbox[2], ix<bbox[2]+250))
         int_im = griddata((iy, ix), Zu.cpu().data.numpy(), (yy, xx))
         int_im = geo_utils.fill_holes(int_im)
-        return int_im[bbox[0]:bbox[0]+250, bbox[2]:bbox[2]+250], int_im, ix[valid_points]-bbox[2], iy[valid_points]-bbox[0], Zu[np.where(valid_points)]
+        return int_im[bbox[0]:bbox[0]+250, bbox[2]:bbox[2]+250], int_im, ix-bbox[2], iy-bbox[0], Zu
 
     def calculate_loss(self, X, Y, Z, gt):
         x_max, y_max = gt.shape[1:]
@@ -81,13 +81,20 @@ class Predictor(object):
         return self.L(gt_height, Z.cuda())
 
     def forward(self, sample):
-        img_pair, masks, h_pair, rpc_pair, area_info, _, y = sample
+        img_pair, masks, h_pair, rpc_pair, area_info, pre_disp, y = sample
         X = Variable(torch.cuda.FloatTensor([img_pair]), requires_grad=False)
         Y = Variable(torch.cuda.FloatTensor([y]), requires_grad=False)
         h_pair = torch.cuda.DoubleTensor(np.stack(h_pair))
         masks = torch.tensor(masks.tolist())
         disparity_map = self.D(X)[0]
-        height_map, height_map_all, lon, lat, heights = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
+        # import ipdb;ipdb.set_trace()
+        # height_map, height_map_all, lon, lat, heights = self.triangulation_forward(Disp, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
+        # _, _, lon_zero, lat_zero, heights_zero = self.triangulation_forward(torch.zeros_like(disparity_map), masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
+        # np.sqrt(np.sum((lon-lon_zero)**2))
+        # np.sqrt(np.sum((lat-lat_zero)**2))
+        # np.sqrt(np.sum((heights-heights_zero)**2))
+        # imageio.imsave(os.path.join('debug/', 'rand_disp.png'), Disp[0, 0].cpu().data.numpy())
+        # imageio.imsave(os.path.join('debug/', 'good_disp.png'), disparity_map[0, 0].cpu().data.numpy())
         loss = self.calculate_loss(lon, lat, heights, Y)
         return disparity_map, height_map, height_map_all, loss
 
@@ -123,7 +130,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    debug_path = './debug/end2end_%d'%args.input_epoch
+    debug_path = './debug/end2end_%s_%d'%(args.exp_name, args.input_epoch)
     if not os.path.exists(debug_path):
         os.mkdir(debug_path)
     fire_palette = imageio.imread('./image/fire_palette.png')[0][:, 0:3]
