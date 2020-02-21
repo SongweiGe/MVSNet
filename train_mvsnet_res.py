@@ -77,7 +77,7 @@ class Trainer(object):
         ru2 = ru2[masks].reshape(-1)
         cu2 = cu2[masks].reshape(-1)
         # import ipdb;ipdb.set_trace()
-        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc_l, rpc_r, verbose=False, inverse_bs=1000)
+        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc_l, rpc_r, verbose=False, inverse_bs=64000)
 
         lons, lats = self.wgs84(Xu.cpu().data.numpy(), Yu.cpu().data.numpy())
         ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
@@ -118,6 +118,18 @@ class Trainer(object):
         # imageio.imsave(os.path.join(debug_path, 'pred.png'), color_map)
         return self.L(gt_height, Z.cuda())
 
+    def data_split(self, fold_id):
+        fold_size = self.n_total//self.n_folds
+        if self.n_folds > 1:
+            test_ids = self.shuffled_index[list(range(i*fold_size, (i+1)*fold_size))]
+            # train_ids = self.shuffled_index
+            train_ids = np.setdiff1d(self.shuffled_index, test_ids)
+        else: # split according to the geographical locations
+            test_ids = np.array([i for i, filename in enumerate(filenames) if int(filename.split('_')[2]) <= 33])
+            # import ipdb;ipdb.set_trace()
+            train_ids = np.setdiff1d(self.shuffled_index, test_ids)
+        return train_ids, test_ids
+
     def run(self):
         self.D.train()
         loss_val = float('inf')
@@ -129,9 +141,9 @@ class Trainer(object):
         print('start training')
         for i in range(1):
         # for i in range(self.n_folds):
-            test_ids = self.shuffled_index[list(range(i*fold_size, (i+1)*fold_size))]
-            train_ids = self.shuffled_index
-            # train_ids = np.setdiff1d(self.shuffled_index, test_ids)
+            train_ids, test_ids = self.data_split(i)
+            # test_ids = self.shuffled_index[list(range(i*fold_size, (i+1)*fold_size))]
+            # train_ids = self.shuffled_index
             # import ipdb;ipdb.set_trace()
             n_batch = train_ids.shape[0]//self.batch_size-1
             n_test_batch = test_ids.shape[0]//self.batch_size-1

@@ -1,3 +1,4 @@
+import time
 import torch
 import numpy as np
 
@@ -68,6 +69,7 @@ def RPCforwardform_matrix(p,q,X,Y,Z):
 
 
 def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=100):
+    begin = time.time()
     npoints = len(ru1)
     print('start triangulation with number of points: %d'%npoints)
     #  setup Parameters based on the notation
@@ -139,6 +141,7 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=
     d2_2=p4_2[2]*Zs_2*Xs_2
     d3_2=p4_2[1]*Zs_2*Ys_2
     # ITERATION 1
+    print("Preparation time = %.3fs"%(time.time() - begin))
 
     A=torch.stack([torch.stack([a1_1-r1*b1_1, a2_1-r1*b2_1, a3_1-r1*b3_1]),
         torch.stack([c1_1-c1*d1_1, c2_1-c1*d2_1, c3_1-c1*d3_1]),
@@ -148,6 +151,9 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=
     DeltaXu = torch.zeros(npoints)
     DeltaYu = torch.zeros(npoints)
     DeltaZu = torch.zeros(npoints)
+
+    print("Preparation initialization time = %.3fs"%(time.time() - begin))
+
     for i in range(npoints//inverse_bs):
         # print(i)
         id_min = i*inverse_bs
@@ -161,7 +167,9 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=
         DeltaXu[id_min:id_max]=LSsol[:, 2, 0]
         DeltaYu[id_min:id_max]=LSsol[:, 1, 0]
         DeltaZu[id_min:id_max]=LSsol[:, 0, 0]
+        print("Inverse step %d time = %.3fs"%(i, time.time() - begin))
 
+    print("Initialization time = %.3fs"%(time.time() - begin))
     # torch.linalg.lstsq(A, b)
     # torch.matmul(A, LSsol)-b
 
@@ -202,7 +210,9 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=
         pol2 = RPCsinglepolynomial_matrix(p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
         pol3 = RPCsinglepolynomial_matrix(p3_1,NormXnew_1,NormYnew_1,NormZnew_1)
         pol4 = RPCsinglepolynomial_matrix(p4_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        print("Preparation 0 step %d time = %.3fs"%(it, time.time() - begin))
         pol1x = RPCsinglepolynomialderivativeX_matrix(p1_1,NormXnew_1,NormYnew_1,NormZnew_1)
+        print("Preparation 0 step %d time = %.3fs"%(it, time.time() - begin))
         pol1y = RPCsinglepolynomialderivativeY_matrix(p1_1,NormXnew_1,NormYnew_1,NormZnew_1)
         pol1z = RPCsinglepolynomialderivativeZ_matrix(p1_1,NormXnew_1,NormYnew_1,NormZnew_1)
         pol2x = RPCsinglepolynomialderivativeX_matrix(p2_1,NormXnew_1,NormYnew_1,NormZnew_1)
@@ -220,6 +230,7 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=
         pdXcol_1 = (pol3x*pol4-pol3*pol4x)/(pol4**2)
         pdYcol_1 = (pol3y*pol4-pol3*pol4y)/(pol4**2)
         pdZcol_1 = (pol3z*pol4-pol3*pol4z)/(pol4**2)
+        print("Preparation 1 step %d time = %.3fs"%(it, time.time() - begin))
         # 2nd camera
         pol1 = RPCsinglepolynomial_matrix(p1_2,NormXnew_2,NormYnew_2,NormZnew_2)
         pol2 = RPCsinglepolynomial_matrix(p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
@@ -243,6 +254,7 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=
         pdXcol_2 = (pol3x*pol4-pol3*pol4x)/(pol4**2)
         pdYcol_2 = (pol3y*pol4-pol3*pol4y)/(pol4**2)
         pdZcol_2 = (pol3z*pol4-pol3*pol4z)/(pol4**2)
+        print("Preparation 2 step %d time = %.3fs"%(it, time.time() - begin))
         # build Jacobian A:
         A = torch.stack([torch.stack([pdXrow_1/Xs_1, pdYrow_1/Ys_1, pdZrow_1/Zs_1]),
             torch.stack([pdXcol_1/Xs_1, pdYcol_1/Ys_1, pdZcol_1/Zs_1]),
@@ -255,6 +267,7 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=
         b = torch.stack([r1-r1_hat, c1-c1_hat, r2-r2_hat, c2-c2_hat]).transpose(1, 0).view(-1, 4, 1)
         # bb=b.*[scale_offsets_1(9)scale_offsets_1(10)scale_offsets_2(9)scale_offsets_2(10)]
         # solution 
+        print("Preparation step %d time = %.3fs"%(it, time.time() - begin))
         for i in range(npoints//inverse_bs):
             # print(i)
             id_min = i*inverse_bs
@@ -262,12 +275,14 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=
             A_temp = A[id_min:id_max]
             b_temp = b[id_min:id_max]
             try:
-                LSsol= torch.matmul(torch.matmul(torch.inverse(torch.matmul(A_temp.transpose(2, 1), A_temp)), A_temp.transpose(2, 1)),b_temp)
+                LSsol= torch.matmul(torch.matmul(torch.inverse(torch.matmul(A_temp.transpose(2, 1), A_temp)), 
+                    A_temp.transpose(2, 1)),b_temp)
             except:
                 import ipdb;ipdb.set_trace()
             DeltaXu[id_min:id_max]=LSsol[:, 0, 0]
             DeltaYu[id_min:id_max]=LSsol[:, 1, 0]
             DeltaZu[id_min:id_max]=LSsol[:, 2, 0]
+        print("Step %d time = %.3fs"%(it, time.time() - begin))
         # for i in range(npoints):
         #     # import ipdb;ipdb.set_trace()
         #     LSsol= torch.matmul(torch.matmul(torch.inverse(torch.matmul(A[:, :, i].transpose(1,0), A[:, :, i])), A[:, :, i].transpose(1,0)),b[:, i])
@@ -316,6 +331,7 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=
         # c2_est = RPCunnormalization(c2_est,scale_offsets_2[8-1],scale_offsets_2[10-1])
         error_pixel_residual_1 = torch.mean(torch.sqrt((ru1-r1_est)**2+(cu1-c1_est)**2))
         error_pixel_residual_2 = torch.mean(torch.sqrt((ru2-r2_est)**2+(cu2-c2_est)**2))
+        print("verbose time = %.3fs"%(time.time() - begin))
         if verbose:
             print('previous 3D point:%.10f,%.10f,%.10f updatedCAM1:%.10f,%.10f,%.10f updatedCAM2:%.10f,%.10f,%.10f \n'%
                 (Xuold,Yuold,Zuold,Xunew_1,Yunew_1,Zunew_1,Xunew_2,Yunew_2,Zunew_2))
@@ -332,7 +348,7 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=
         Yu = Yunew_1*0.5+Yunew_2*0.5
         Zu = Zunew_1*0.5+Zunew_2*0.5        
         error_residual_old=error_residual
-    # import ipdb;ipdb.set_trace()
+    import ipdb;ipdb.set_trace()
     return Xu,Yu,Zu,error_residual,error_pixel_residual_1*0.5+error_pixel_residual_2*0.5
 
 

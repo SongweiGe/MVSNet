@@ -164,4 +164,4 @@ if __name__ == '__main__':
     # AllX, Ally = load_data(gt_path, data_path, kml_path)
     train_dataset= MVSdataset(gt_path, data_path, kml_path)
     train_loader = data.DataLoader(train_dataset, batch_size=1, shuffle=True)
-    import ipdb;ipdb.set_trace()
+    # import ipdb;ipdb.set_trace()
