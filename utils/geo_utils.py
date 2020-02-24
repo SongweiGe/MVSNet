@@ -37,6 +37,7 @@ def get_bounds_and_imsize_from_kml(kml_file, definition = 0.3, margin = 100):
 
 
 def spherical_to_image_positions(lons, lats, bounds, im_size):
+    # import ipdb;ipdb.set_trace()    
     y = (lons - bounds[0][0]) / (bounds[0][1] - bounds[0][0])
     x = (lats - bounds[1][0]) / (bounds[1][1] - bounds[1][0])
     y *= im_size[0]
@@ -73,6 +74,10 @@ class RPCModel:
         self.row_den = list(map(float, d['LINE_DEN_COEFF'].split()))
         self.col_num = list(map(float, d['SAMP_NUM_COEFF'].split()))
         self.col_den = list(map(float, d['SAMP_DEN_COEFF'].split()))
+
+    def to_list(self):
+        return [self.row_offset, self.col_offset, self.lat_offset, self.lon_offset, self.alt_offset, self.row_scale, self.col_scale, 
+                self.lat_scale, self.lon_scale, self.alt_scale]+self.row_num+self.row_den+self.col_num+self.col_den
 
 def rpc_to_dict(model):
     d = dict()

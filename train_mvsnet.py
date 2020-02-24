@@ -13,42 +13,29 @@ from utils.model_util import FlowNetS
 
 from utils import geo_utils
 from triangulationRPC_matrix_torch import triangulationRPC_matrix
+# from triangulation_bak import triangulationRPC_matrix
 # from torchinterp1d import Interp1d
 
 class Trainer(object):
-    def __init__(self, args, dataloader):
+    def __init__(self, args, train_loader, test_loader):
         self.args = args
-        self.n_folds = args.n_folds
         self.n_epochs = args.epochs
         self.batch_size = args.batch_size
         self.img_size = args.img_size
         self.start_epoch = args.input_epoch
-        if args.res:
-            self.D = FlowNetS(input_channels=3).cuda()
-        else:
-            self.D = FlowNetS().cuda()
+        self.D = FlowNetS().cuda()
         # self.L = nn.MSELoss().cuda()
         self.L = nn.L1Loss().cuda()
         self.optimizer = torch.optim.Adadelta(self.D.parameters(), lr=1e-0)
-        self.dataloader = dataloader
-        self.n_total = len(self.dataloader)
-        self.shuffled_index = np.arange(self.n_total)
+        self.train_loader = train_loader
+        self.test_loader = test_loader
         np.random.seed(2019)
-        np.random.shuffle(self.shuffled_index)
         self.wgs84 = pyproj.Proj('+proj=utm +zone=21 +datum=WGS84 +south')
         # self.interp_method = Interp1d()
         self.cu1_rec, self.ru1_rec = torch.meshgrid([torch.arange(self.img_size), torch.arange(self.img_size)])
         self.cu1_rec = self.cu1_rec.type(torch.cuda.DoubleTensor).transpose(1, 0)
         self.ru1_rec = self.ru1_rec.type(torch.cuda.DoubleTensor).transpose(1, 0)
         self.xx, self.yy = np.meshgrid(np.arange(250), np.arange(250))
-
-
-    def weights_init(self, m):
-        try:
-            m.weight.data.normal_(0, 1)
-            m.bias.data.zero_()
-        except:
-            m.data.normal_(0, 0.01)
 
     def apply_homography(self, h, x):
         #                    h[0] h[1] h[2]
@@ -63,24 +50,30 @@ class Trainer(object):
         return y0, y1
 
     def triangulation_forward(self, disparity_map, masks, rpc_pair, h_pair, area_info):
-        rpc_l, rpc_r = rpc_pair
-        h_left_inv, h_right_inv = h_pair
-        bbox, bounds, im_size = area_info
-        cu2_rec = self.cu1_rec + disparity_map[0, 0, :, :].type(torch.cuda.DoubleTensor)
+        masks = masks[0]
+        rpc_l, rpc_r = rpc_pair[0]
+        h_left_inv, h_right_inv = h_pair[0]
+
+        # transform into numpy to process the X and Y coordinates
+        area_info = area_info.data.numpy()
+        bbox, bounds, im_size = area_info[0, :4], np.stack([area_info[0, 4:6], area_info[0, 6:8]]), area_info[0, -2:]
+        cu2_rec = self.cu1_rec + disparity_map[0, :, :].type(torch.cuda.DoubleTensor)
         ru2_rec = self.ru1_rec
         # cu2_rec = cu1_rec
 
         cu1, ru1 = self.apply_homography(h_left_inv, [self.cu1_rec, self.ru1_rec])
         cu2, ru2 = self.apply_homography(h_right_inv, [cu2_rec, ru2_rec])
+
         ru1 = ru1[masks].reshape(-1)
         cu1 = cu1[masks].reshape(-1)
         ru2 = ru2[masks].reshape(-1)
         cu2 = cu2[masks].reshape(-1)
-        # import ipdb;ipdb.set_trace()
         Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1[:630000], cu1[:630000], ru2[:630000], cu2[:630000], rpc_l, rpc_r, verbose=False, inverse_bs=1000)
 
         lons, lats = self.wgs84(Xu.cpu().data.numpy(), Yu.cpu().data.numpy())
         ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
+        import ipdb;ipdb.set_trace()
+
         valid_points = np.logical_and(np.logical_and(iy>bbox[0], iy<bbox[0]+250), np.logical_and(ix>bbox[2], ix<bbox[2]+250))
         # input_coords = torch.stack([torch.cuda.FloatTensor(iy), torch.cuda.FloatTensor(ix)])
         # output_coords = torch.stack([torch.cuda.FloatTensor(self.yy), torch.cuda.FloatTensor(self.xx)])
@@ -102,107 +95,65 @@ class Trainer(object):
         loss_val = float('inf')
         self.train_loss = []
         outputs = []
-        cv_losses = []
-        fold_size = self.n_total//self.n_folds
-        # 5 cross validation
         print('start training')
-        for i in range(1):
-        # for i in range(self.n_folds):
-            test_ids = self.shuffled_index[list(range(i*fold_size, (i+1)*fold_size))]
-            train_ids = self.shuffled_index
-            # train_ids = np.setdiff1d(self.shuffled_index, test_ids)
-            # import ipdb;ipdb.set_trace()
-            n_batch = train_ids.shape[0]//self.batch_size-1
-            n_test_batch = test_ids.shape[0]//self.batch_size-1
-            for p in self.D.parameters():
-                self.weights_init(p)
-            for j in range(self.n_epochs):
-                np.random.shuffle(train_ids)
-                begin = time.time()
-                train_epoch_loss = []
-                test_epoch_loss = []
-                # import ipdb;ipdb.set_trace()
-                for k in range(n_batch+1):
-                    #forward calculation and back propagation, X: B x P x 2 x W x H
-                    if k == n_batch:
-                        train_batch_ids = train_ids[k*self.batch_size:]
-                    else:
-                        train_batch_ids = train_ids[(k+0)*self.batch_size:(k+1)*self.batch_size]
-                    img_pair, masks, h_pair, rpc_pair, area_info, pre_disp, y = self.dataloader.__getitem__(train_batch_ids[0])
-                    self.optimizer.zero_grad()
-                    Y = Variable(torch.cuda.FloatTensor([y]), requires_grad=False)
-                    h_pair = torch.cuda.DoubleTensor(np.stack(h_pair))
-                    masks = torch.tensor(masks.tolist())
-                    if args.res:
-                        X = Variable(torch.cuda.FloatTensor([np.vstack([img_pair, np.expand_dims(pre_disp, 0)])]), requires_grad=False)
-                        Disp = Variable(torch.cuda.FloatTensor(np.expand_dims(np.expand_dims(pre_disp, 0), 0)), requires_grad=False)
-                        disparity_map = self.D(X)[0]+Disp
-                    else:
-                        X = Variable(torch.cuda.FloatTensor([img_pair]), requires_grad=False)
-                        disparity_map = self.D(X)[0]
-                    lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, rpc_pair, h_pair, area_info)
-                    # import ipdb;ipdb.set_trace()
-                    print('range of predicted height: (%.3f, %.3f), ground truth: (%.3f, %.3f)'%(heights.min(), heights.max(), Y.min(), Y.max()))
-                    loss = self.calculate_loss(lon, lat, heights, Y)
-                    loss_val = loss.data.cpu().numpy()
-                    print('The number of remaining points:%d'%len(lon))
-                    if np.isnan(loss_val):
-                        continue
-                        # import ipdb;ipdb.set_trace()
-                    loss.backward()
-                    self.optimizer.step()
-                    train_epoch_loss.append(loss_val)
-                    del X,Y,lon, lat, heights,loss
-                    print("Epochs %d, iteration: %d, time = %ds, training loss: %f"%(j+self.start_epoch, k, time.time() - begin, loss_val))
-                
-                if (j+self.start_epoch+1)%5 == 0:
-                    torch.save(self.D.state_dict(), os.path.join('results', self.args.exp_name, 'models', 'fold%d_%d'%(i, j+self.start_epoch)))
-                print("Fold %d, Epochs %d, time = %ds, training loss: %f"%(i, j+self.start_epoch, time.time() - begin, np.mean(train_epoch_loss)))
-            
-            # save the last training estimation
-            if self.args.save_train:
-                output = (pred_height.cpu().data.numpy())
-                data_util.save_height(self.args.exp_name, output, filenames[train_batch_ids], 'train')
-            # test
-            for k in range(n_test_batch+1):
-                if k == n_test_batch:
-                    test_batch_ids = test_ids[k*self.batch_size:]
-                else:
-                    test_batch_ids = test_ids[k*self.batch_size:(k+1)*self.batch_size]
-                img_pair, h_pair, rpc_pair, area_info, _, y = self.dataloader.__getitem__(train_batch_ids[0])
-                Y = Variable(torch.cuda.FloatTensor(y), requires_grad=False)
-                if args.res:
-                    X = Variable(torch.cuda.FloatTensor([np.vstack([img_pair, np.expand_dims(pre_disp, 0)])]), requires_grad=False)
-                    Disp = Variable(torch.cuda.FloatTensor(np.expand_dims(np.expand_dims(pre_disp, 0), 0)), requires_grad=False)
-                    disparity_map = self.D(X)[0]+Disp
-                else:
-                    X = Variable(torch.cuda.FloatTensor([img_pair]), requires_grad=False)
-                    disparity_map = self.D(X)[0]
-                # lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map[:, :, 300:400, 300:400], masks[300:400, 300:400], 100, 100, rpc_pair, h_pair, area_info)
-                lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, rpc_pair, h_pair, area_info)
-                loss = self.calculate_loss(lon, lat, heights, Y)
-                loss_val = loss.data.cpu().numpy()
-                test_epoch_loss.append(loss_val)
-                output = (pred_height.cpu().data.numpy())
-                data_util.save_height(self.args.exp_name, output, filenames[test_batch_ids], 'test')
-                del X,Y,pred_height,loss
-            print("Fold %d, Epochs %d, time = %ds, training loss: %f, test loss %f"%(i, j, time.time() - begin, np.mean(train_epoch_loss), np.mean(test_epoch_loss)))
 
-            cv_losses.append(np.mean(test_epoch_loss))
-        print('overall performance: %f'%np.mean(cv_losses))
-        return cv_losses
+        for j in range(self.n_epochs):
+            begin = time.time()
+            train_epoch_loss = []
+            test_epoch_loss = []
+            for k, batch in enumerate(self.train_loader):
+                #forward calculation and back propagation, X: B x P x 2 x W x H
+                X, masks, h_pair, rpc_pair, area_info, Y, filenames = batch['images'].cuda(), batch['masks'], batch['hs'].cuda(),\
+                                                                    batch['rpcs'].cuda(), batch['area_infos'], batch['ys'].cuda(), batch['names']
+                
+                self.optimizer.zero_grad()
+                disparity_map = self.D(X)[0][:, 0, :, :] # only left disp map
+                lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, rpc_pair, h_pair, area_info)
+                # import ipdb;ipdb.set_trace()
+                print('range of predicted height: (%.3f, %.3f), ground truth: (%.3f, %.3f)'%(heights.min(), heights.max(), Y.min(), Y.max()))
+                loss = self.calculate_loss(lon, lat, heights, Y[0])
+                loss_val = loss.data.cpu().numpy()
+                print('The number of remaining points:%d'%len(lon))
+                if np.isnan(loss_val):
+                    continue
+                    # import ipdb;ipdb.set_trace()
+                loss.backward()
+                self.optimizer.step()
+                train_epoch_loss.append(loss_val)
+                del X,Y,lon, lat, heights,loss
+                print("Epochs %d, iteration: %d, time = %ds, training loss: %f"%(j+self.start_epoch, k, time.time() - begin, loss_val))
+            
+            if (j+self.start_epoch+1)%5 == 0:
+                torch.save(self.D.state_dict(), os.path.join('results', self.args.exp_name, 'models', 'epoch_%d'%(j+self.start_epoch)))
+            print("Fold %d, Epochs %d, time = %ds, training loss: %f"%(i, j+self.start_epoch, time.time() - begin, np.mean(train_epoch_loss)))
+        
+        # save the last training estimation
+        if self.args.save_train:
+            output = (pred_height.cpu().data.numpy())
+            data_util.save_height(self.args.exp_name, output, filenames[train_batch_ids], 'train')
+        # test
+        for k, batch in enumerate(self.test_loader):
+            X, masks, h_pair, rpc_pair, area_info, y, filenames = batch['images'].cuda(), batch['masks'], batch['hs'].cuda(),\
+                                                                batch['rpcs'].cuda(), batch['area_infos'], batch['ys'].cuda(), batch['names']
+            lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, rpc_pair, h_pair, area_info)
+            loss = self.calculate_loss(lon, lat, heights, Y[0])
+            loss_val = loss.data.cpu().numpy()
+            test_epoch_loss.append(loss_val)
+            output = (pred_height.cpu().data.numpy())
+            data_util.save_height(self.args.exp_name, output, filenames[test_batch_ids], 'test')
+            del X,Y,pred_height,loss
+        print('overall performance: %f'%np.mean(test_epoch_loss))
+        return test_epoch_loss
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('-n', '--exp_name', type=str, default='plain', help='the name to identify current experiment')
-    parser.add_argument("-ie", "--input_epoch", type=int, default=0, help='Load model after n epochs')
-    parser.add_argument("-ip", "--input_fold", type=str, default='0', help='Load model filepath')
+    parser.add_argument('-n', '--exp_name', type=str, default='rpcnet', help='the name to identify current experiment')
+    parser.add_argument("-ie", "--input_epoch", type=int, default=99, help='Load model after n epochs')
     parser.add_argument("-ld", "--load_model", type=int, default=0, help='Load pretrained model or not')
-    parser.add_argument('-e', '--epochs', type=int, default=400, help='How many epochs to run in total?')
-    parser.add_argument('-b', '--batch_size', type=int, default=1, help='Batch size during training per GPU')
+    parser.add_argument('-e', '--epochs', type=int, default=500, help='How many epochs to run in total?')
+    parser.add_argument('-b', '--batch_size', type=int, default=2, help='Batch size during training per GPU')
     parser.add_argument('-s', '--seed', type=int, default=0, help='random seed for generating data')
-    parser.add_argument('-nf', '--n_folds', type=int, default=5, help='number of folds')
     parser.add_argument('-g', '--gpu_id', type=str, default='0', help='gpuid used for trianing')
     parser.add_argument('-m', '--model', type=str, default='plain', help='which model to be used')
     parser.add_argument('-r', '--res', type=int, default=0, help='residual or not')
@@ -218,19 +169,23 @@ if __name__ == '__main__':
         os.mkdir(os.path.join('results/', args.exp_name, 'reconstruction_test'))
 
     os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu_id
-    data_path = '/disk/songwei/LockheedMartion/end2end/MVS/'
-    kml_path = '/disk/songwei/LockheedMartion/end2end/KML/'
-    gt_path = '/disk/songwei/LockheedMartion/end2end/DSM/'
-    # filenames = [line.split('/')[6] for line in open('results/log.txt') if line.startswith('/disk')]
-    filenames = [line.rstrip() for line in open('debug/file_lists.txt')][-100:-20]
+    filenames = [line.rstrip() for line in open('data/file_lists.txt')]
+
+    ### load data from scratch. this requires a lot of geo packages###
+    # data_path = '/disk/songwei/LockheedMartion/end2end/MVS/'
+    # kml_path = '/disk/songwei/LockheedMartion/end2end/KML/'
+    # gt_path = '/disk/songwei/LockheedMartion/end2end/DSM/'
     # train_dataset= data_util.MVSdataset(gt_path, data_path, kml_path, args.img_size, filenames)
-    data_file = './results/data_small.npz'
-    train_dataset= data_util.MVSdataset_lithium(data_file)
     # train_dataset.save_data('results/data_small.npz')
-    # train_loader = data.DataLoader(train_dataset, batch_size=1, shuffle=True)
-    # import ipdb;ipdb.set_trace()
-    trainer = Trainer(args, train_dataset)
+
+    ### load data from numpy file###
+    data_file = 'data/data_small.npz'
+    train_loader, test_loader = data_util.get_numpy_dataset(filenames[-100:-20], args.batch_size, data_file)
+    # data_file = 'data/data_all.npz'
+    # train_loader, test_loader = data_util.get_numpy_dataset(filenames, args.batch_size, data_file)
+
+    trainer = Trainer(args, train_loader, test_loader)
     if args.load_model:
         print('loading pretrained model from epoch %d'%args.input_epoch)
-        trainer.D.load_state_dict(torch.load(os.path.join('./results', args.exp_name, 'models', 'fold%s_%d'%(args.input_fold, args.input_epoch))))
+        trainer.D.load_state_dict(torch.load(os.path.join('./results/pretrain/models', 'epoch_%d'%args.input_epoch)))
     trainer.run()

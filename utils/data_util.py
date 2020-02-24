@@ -8,12 +8,12 @@ try:
 except :
     pass
 
-
 import os
 import time
 import numpy as np
 from .geo_utils import open_gtiff, get_bounds_and_imsize_from_kml, rpc_to_dict, RPCModel
-import torch.utils.data as data
+import torch.utils.data as torch_data
+from torchvision import transforms
 
 def load_bbox(path):
     with open(path) as f:
@@ -24,7 +24,7 @@ def load_bbox(path):
 def save_height(outpath, hms, fns, mode):
     # hms: N x length x length
     for hm, fn in zip(hms, fns):
-        np.save(os.path.join(os.path.join('../results', outpath, 'reconstruction_%s'%mode), fn+'.npy'), hm)
+        np.save(os.path.join(os.path.join('../results', outpath, mode), fn+'.npy'), hm)
 
 
 def invert_homography(i):
@@ -93,7 +93,8 @@ def load_folder(tmp_path, kml_file, gt_path=None, mode='train', disp=False):
     else:
         return data_left, data_right, rpc_l, rpc_r, h_left_inv, h_right_inv, bbox, bounds, im_size, disparity_map
 
-class MVSdataset(data.Dataset):
+
+class MVSdataset_raw(torch_data.Dataset):
     def __init__(self, gt_path, data_path, kml_path, img_size, filenames=None):
         # load input data
         self.img_pair = []
@@ -138,7 +139,75 @@ class MVSdataset(data.Dataset):
         data = np.load(filename, allow_pickle=True)
 
 
-class MVSdataset_lithium(data.Dataset):
+def data_split(n_total, filenames, boundary=33):
+    # test_ids = np.array([i for i, filename in enumerate(filenames) if int(filename.split('_')[2]) <= 33])
+    test_ids = np.array([20])
+    train_ids = np.setdiff1d(np.arange(n_total), test_ids)
+    return train_ids, test_ids
+
+
+def get_numpy_dataset(filenames, bs, data_file='results/data_all.npz'):
+    begin_time = time.time()
+    # fetch the dataset
+    data = np.load(data_file, allow_pickle=True)
+    img_pair = data['images']
+    # import ipdb;ipdb.set_trace()
+    rpc_pair = np.array([[RPCModel(item[0]), RPCModel(item[1])] for item in data['rpcs']])
+    h_pair = data['hs']
+    area_info = data['area_infos']
+    left_masks = data['masks'].astype(np.uint8)
+    pre_disps = data['disps']
+    Ally = data['ys']
+    filenames = np.array(filenames)
+
+    # split the dataset
+    train_ids, test_ids = data_split(Ally.shape[0], filenames)
+
+    train_dict = {'images': img_pair[train_ids], 'rpcs':rpc_pair[train_ids], 'hs': h_pair[train_ids], 
+                'area_infos':area_info[train_ids], 'masks':left_masks[train_ids], 'disps':pre_disps[train_ids], 
+                'ys':Ally[train_ids], 'names':filenames[train_ids]}
+    test_dict = {'images': img_pair[test_ids], 'rpcs':rpc_pair[test_ids], 'hs': h_pair[test_ids], 
+                'area_infos':area_info[test_ids], 'masks':left_masks[test_ids], 'disps':pre_disps[test_ids], 
+                'ys':Ally[test_ids], 'names':filenames[test_ids]}
+    train_dataset = MVSdataset(train_dict)
+    test_dataset = MVSdataset(test_dict)
+    print('it took %.2fs to load data'%(time.time()-begin_time))
+    return torch_data.DataLoader(train_dataset, batch_size=bs, shuffle=False, pin_memory=True), \
+            torch_data.DataLoader(test_dataset, batch_size=bs, pin_memory=True)
+
+
+class MVSdataset(torch_data.Dataset):
+    def __init__(self, data):
+        # load input data
+        self.transform = transforms.Compose([transforms.ToTensor()])
+        self.img_pair = data['images']
+        self.rpc_pair = data['rpcs']
+        self.h_pair = data['hs']
+        self.area_info = data['area_infos']
+        self.left_masks = data['masks']
+        self.pre_disps = data['disps']
+        self.Ally = data['ys']
+        self.names = data['names']
+    def __getitem__(self, index):
+        # import ipdb;ipdb.set_trace()
+        area_info = np.array(list(self.area_info[index][0]) + self.area_info[index][1][0] +
+                            self.area_info[index][1][1] + list(self.area_info[index][2]))
+        rpc_list = np.array([self.rpc_pair[index][0].to_list(), self.rpc_pair[index][1].to_list()])
+        elem = {'images': self.img_pair[index], 
+                'hs': self.h_pair[index], 
+                'area_infos':area_info, 
+                'masks':self.left_masks[index], 
+                'disps':self.pre_disps[index], 
+                'ys':self.Ally[index],
+                'names':self.names[index], 
+                'rpcs':rpc_list
+                }
+        return elem
+    def __len__(self):
+        return len(self.h_pair)
+
+
+class MVSdataset_lithium(torch_data.Dataset):
     def __init__(self, data_file='results/data_all.npz'):
         # load input data
         begin_time = time.time()
@@ -163,5 +232,5 @@ if __name__ == '__main__':
     gt_path = '/disk/songwei/LockheedMartion/DeepVote/DSM/'
     # AllX, Ally = load_data(gt_path, data_path, kml_path)
     train_dataset= MVSdataset(gt_path, data_path, kml_path)
-    train_loader = data.DataLoader(train_dataset, batch_size=1, shuffle=True)
-    # import ipdb;ipdb.set_trace()
+    train_loader = torch_data.DataLoader(train_dataset, batch_size=1, shuffle=True)
+    import ipdb;ipdb.set_trace()

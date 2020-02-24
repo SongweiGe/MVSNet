@@ -155,3 +155,57 @@ class FlowNetS(nn.Module):
             return flow2,flow3,flow4,flow5,flow6
         else:
             return flow2,
+
+
+def net_init(net):
+    for m in net.modules():
+        if isinstance(m, nn.Linear):
+            #n = m.out_features
+            #m.weight.data.normal_(0, 0.02 / n) #this modified initialization seems to work better, but it's very hacky
+            #n = m.in_features
+            #m.weight.data.normal_(0, math.sqrt(2. / n)) #xavier
+            m.weight.data.normal_(0, 0.02)
+            if m.bias is not None:
+                m.bias.data.zero_()
+
+        if isinstance(m, nn.Conv2d): #or isinstance(m, nn.ConvTranspose2d):
+            #n = m.kernel_size[0] * m.kernel_size[1] * m.in_channels
+            #m.weight.data.normal_(0, math.sqrt(2. / n)) #this modified initialization seems to work better, but it's very hacky
+            m.weight.data.normal_(0, 0.02)
+            if m.bias is not None:
+                m.bias.data.zero_()
+
+        if isinstance(m, nn.ConvTranspose2d):
+            # Initialize Deconv with bilinear weights.
+            base_weights = bilinear_init(m.weight.data.size(-1))
+            base_weights = base_weights.unsqueeze(0).unsqueeze(0)
+            m.weight.data = base_weights.repeat(m.weight.data.size(0), m.weight.data.size(1), 1, 1)
+            if m.bias is not None:
+                m.bias.data.zero_()
+
+        if isinstance(m, nn.Conv3d) or isinstance(m, nn.ConvTranspose3d):
+            #n = m.kernel_size[0] * m.kernel_size[1] * m.kernel_size[2] * m.in_channels
+            #m.weight.data.normal_(0, math.sqrt(2. / n))
+            m.weight.data.normal_(0, 0.02)
+            if m.bias is not None:
+                m.bias.data.zero_()
+
+        elif isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm3d):
+            m.weight.data.fill_(1)
+            m.bias.data.zero_()
+
+
+def bilinear_init(kernel_size=4):
+    # Following Caffe's BilinearUpsamplingFiller
+    # https://github.com/BVLC/caffe/pull/2213/files
+    import numpy as np
+    width = kernel_size
+    height = kernel_size
+    f = int(np.ceil(width / 2.))
+    cc = (2 * f - 1 - f % 2) / (2.*f)
+    weights = torch.zeros((height, width))
+    for y in range(height):
+        for x in range(width):
+            weights[y, x] = (1 - np.abs(x / f - cc)) * (1 - np.abs(y / f - cc))
+
+    return weights

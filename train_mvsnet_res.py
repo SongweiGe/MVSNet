@@ -14,7 +14,8 @@ from utils.model_util import FlowNetS
 from scipy.interpolate import griddata
 
 from utils import geo_utils, eval_util
-from triangulationRPC_matrix_torch import triangulationRPC_matrix
+from triangulation_bak import triangulationRPC_matrix
+# from triangulationRPC_matrix_torch import triangulationRPC_matrix
 # from torchinterp1d import Interp1d
 
 fire_palette = imageio.imread('./image/fire_palette.png')[0][:, 0:3]
@@ -34,7 +35,7 @@ class Trainer(object):
         self.n_total = len(self.dataloader)
         self.shuffled_index = np.arange(self.n_total)
         np.random.seed(2019)
-        np.random.shuffle(self.shuffled_index)
+        # np.random.shuffle(self.shuffled_index)
         self.wgs84 = pyproj.Proj('+proj=utm +zone=21 +datum=WGS84 +south')
         # self.interp_method = Interp1d()
         self.cu1_rec, self.ru1_rec = torch.meshgrid([torch.arange(self.img_size), torch.arange(self.img_size)])
@@ -76,11 +77,11 @@ class Trainer(object):
         cu1 = cu1[masks].reshape(-1)
         ru2 = ru2[masks].reshape(-1)
         cu2 = cu2[masks].reshape(-1)
-        # import ipdb;ipdb.set_trace()
         Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc_l, rpc_r, verbose=False, inverse_bs=64000)
 
         lons, lats = self.wgs84(Xu.cpu().data.numpy(), Yu.cpu().data.numpy())
         ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
+        import ipdb;ipdb.set_trace()
         valid_points = np.logical_and(np.logical_and(iy>bbox[0], iy<bbox[0]+250), np.logical_and(ix>bbox[2], ix<bbox[2]+250))
         # input_coords = torch.stack([torch.cuda.FloatTensor(iy), torch.cuda.FloatTensor(ix)])
         # output_coords = torch.stack([torch.cuda.FloatTensor(self.yy), torch.cuda.FloatTensor(self.xx)])
@@ -141,16 +142,16 @@ class Trainer(object):
         print('start training')
         for i in range(1):
         # for i in range(self.n_folds):
-            train_ids, test_ids = self.data_split(i)
-            # test_ids = self.shuffled_index[list(range(i*fold_size, (i+1)*fold_size))]
-            # train_ids = self.shuffled_index
+            # train_ids, test_ids = self.data_split(i)
+            test_ids = self.shuffled_index[list(range(i*fold_size, (i+1)*fold_size))]
+            train_ids = self.shuffled_index
             # import ipdb;ipdb.set_trace()
             n_batch = train_ids.shape[0]//self.batch_size-1
             n_test_batch = test_ids.shape[0]//self.batch_size-1
             for p in self.D.parameters():
                 self.weights_init(p)
             for j in range(self.n_epochs):
-                np.random.shuffle(train_ids)
+                # np.random.shuffle(train_ids)
                 begin = time.time()
                 train_epoch_loss = []
                 test_epoch_loss = []
@@ -171,7 +172,8 @@ class Trainer(object):
                     self.optimizer.zero_grad()
                     # import ipdb;ipdb.set_trace()
                     
-                    disparity_map = self.D(X)[0]+Disp
+                    disparity_map = self.D(X)[0]
+                    # disparity_map = self.D(X)[0]+Disp
                     lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
                     print('range of predicted height: (%.3f, %.3f), ground truth: (%.3f, %.3f)'%(heights.min(), heights.max(), Y.min(), Y.max()))
                     loss = self.calculate_loss(lon, lat, heights, Y)
@@ -206,7 +208,8 @@ class Trainer(object):
                 Disp = Variable(torch.cuda.FloatTensor(pre_disp), requires_grad=False)
                 h_pair = torch.cuda.DoubleTensor(np.stack(h_pair))
                 masks = torch.tensor(masks.tolist())
-                disparity_map = self.D(X)[0]+Disp
+                disparity_map = self.D(X)[0]
+                # disparity_map = self.D(X)[0]+Disp
                 # lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map[:, :, 300:400, 300:400], masks[300:400, 300:400], 100, 100, rpc_pair, h_pair, area_info)
                 lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, X.shape[2], X.shape[3], rpc_pair, h_pair, area_info)
                 loss = self.calculate_loss(lon, lat, heights, Y)
@@ -249,7 +252,7 @@ if __name__ == '__main__':
     data_path = '/disk/songwei/LockheedMartion/end2end/MVS/'
     kml_path = '/disk/songwei/LockheedMartion/end2end/KML/'
     gt_path = '/disk/songwei/LockheedMartion/end2end/DSM/'
-    data_file = './results/data_small.npz'
+    data_file = './data/data_small.npz'
     train_dataset= data_util.MVSdataset_lithium(data_file)
     # train_loader = data.DataLoader(train_dataset, batch_size=1, shuffle=True)
     # import ipdb;ipdb.set_trace()
