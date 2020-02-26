@@ -140,8 +140,7 @@ class MVSdataset_raw(torch_data.Dataset):
 
 
 def data_split(n_total, filenames, boundary=33):
-    # test_ids = np.array([i for i, filename in enumerate(filenames) if int(filename.split('_')[2]) <= 33])
-    test_ids = np.array([20])
+    test_ids = np.array([i for i, filename in enumerate(filenames) if int(filename.split('_')[2]) <= 33])
     train_ids = np.setdiff1d(np.arange(n_total), test_ids)
     return train_ids, test_ids
 

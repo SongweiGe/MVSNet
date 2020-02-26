@@ -112,7 +112,7 @@ def inverse_3_by_3(mat): # N * n * n
 def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=100):
     begin = time.time()
     npoints = len(ru1)
-    print('start triangulation with number of points: %d'%npoints)
+    # print('start triangulation with number of points: %d'%npoints)
     
     # #  setup Parameters based on the notation
     p1_1 = rpc1[10:30]

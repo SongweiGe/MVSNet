@@ -72,7 +72,7 @@ class Trainer(object):
 
         lons, lats = self.wgs84(Xu.cpu().data.numpy(), Yu.cpu().data.numpy())
         ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
-        import ipdb;ipdb.set_trace()
+        # import ipdb;ipdb.set_trace()
 
         valid_points = np.logical_and(np.logical_and(iy>bbox[0], iy<bbox[0]+250), np.logical_and(ix>bbox[2], ix<bbox[2]+250))
         # input_coords = torch.stack([torch.cuda.FloatTensor(iy), torch.cuda.FloatTensor(ix)])
@@ -88,7 +88,7 @@ class Trainer(object):
         x_max, y_max = gt.shape[1:]
         grid = torch.stack([torch.cuda.FloatTensor(X)/x_max*2-1, torch.cuda.FloatTensor(Y)/y_max*2-1]).transpose(1, 0).view(1, 1, -1, 2)
         gt_height = torch.nn.functional.grid_sample(gt.unsqueeze(1), grid.cuda()).squeeze()
-        return self.L(gt_height, Z.cuda())
+        return self.L(gt_height.double(), Z)
 
     def run(self):
         self.D.train()
@@ -110,10 +110,10 @@ class Trainer(object):
                 disparity_map = self.D(X)[0][:, 0, :, :] # only left disp map
                 lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, rpc_pair, h_pair, area_info)
                 # import ipdb;ipdb.set_trace()
-                print('range of predicted height: (%.3f, %.3f), ground truth: (%.3f, %.3f)'%(heights.min(), heights.max(), Y.min(), Y.max()))
-                loss = self.calculate_loss(lon, lat, heights, Y[0])
+                # print('range of predicted height: (%.3f, %.3f), ground truth: (%.3f, %.3f)'%(heights.min(), heights.max(), Y.min(), Y.max()))
+                loss = self.calculate_loss(lon, lat, heights, Y[0:1])
                 loss_val = loss.data.cpu().numpy()
-                print('The number of remaining points:%d'%len(lon))
+                # print('The number of remaining points:%d'%len(lon))
                 if np.isnan(loss_val):
                     continue
                     # import ipdb;ipdb.set_trace()
@@ -125,7 +125,7 @@ class Trainer(object):
             
             if (j+self.start_epoch+1)%5 == 0:
                 torch.save(self.D.state_dict(), os.path.join('results', self.args.exp_name, 'models', 'epoch_%d'%(j+self.start_epoch)))
-            print("Fold %d, Epochs %d, time = %ds, training loss: %f"%(i, j+self.start_epoch, time.time() - begin, np.mean(train_epoch_loss)))
+            print("Epochs %d, time = %ds, average training loss: %f"%(j+self.start_epoch, time.time() - begin, np.mean(train_epoch_loss)))
         
         # save the last training estimation
         if self.args.save_train:
@@ -133,10 +133,10 @@ class Trainer(object):
             data_util.save_height(self.args.exp_name, output, filenames[train_batch_ids], 'train')
         # test
         for k, batch in enumerate(self.test_loader):
-            X, masks, h_pair, rpc_pair, area_info, y, filenames = batch['images'].cuda(), batch['masks'], batch['hs'].cuda(),\
+            X, masks, h_pair, rpc_pair, area_info, Y, filenames = batch['images'].cuda(), batch['masks'], batch['hs'].cuda(),\
                                                                 batch['rpcs'].cuda(), batch['area_infos'], batch['ys'].cuda(), batch['names']
             lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, rpc_pair, h_pair, area_info)
-            loss = self.calculate_loss(lon, lat, heights, Y[0])
+            loss = self.calculate_loss(lon, lat, heights, Y[0:1])
             loss_val = loss.data.cpu().numpy()
             test_epoch_loss.append(loss_val)
             output = (pred_height.cpu().data.numpy())
@@ -149,7 +149,7 @@ class Trainer(object):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-n', '--exp_name', type=str, default='rpcnet', help='the name to identify current experiment')
-    parser.add_argument("-ie", "--input_epoch", type=int, default=99, help='Load model after n epochs')
+    parser.add_argument("-ie", "--input_epoch", type=int, default=0, help='Load model after n epochs')
     parser.add_argument("-ld", "--load_model", type=int, default=0, help='Load pretrained model or not')
     parser.add_argument('-e', '--epochs', type=int, default=500, help='How many epochs to run in total?')
     parser.add_argument('-b', '--batch_size', type=int, default=2, help='Batch size during training per GPU')
@@ -157,7 +157,7 @@ if __name__ == '__main__':
     parser.add_argument('-g', '--gpu_id', type=str, default='0', help='gpuid used for trianing')
     parser.add_argument('-m', '--model', type=str, default='plain', help='which model to be used')
     parser.add_argument('-r', '--res', type=int, default=0, help='residual or not')
-    parser.add_argument('--img_size', type=int, default=1088, help='number of folds')
+    parser.add_argument('--img_size', type=int, default=1200, help='number of folds')
     parser.add_argument('--save_train', type=bool, default=False, help='save the reconstruction results for training data')
 
     args = parser.parse_args()
@@ -179,10 +179,10 @@ if __name__ == '__main__':
     # train_dataset.save_data('results/data_small.npz')
 
     ### load data from numpy file###
-    data_file = 'data/data_small.npz'
-    train_loader, test_loader = data_util.get_numpy_dataset(filenames[-100:-20], args.batch_size, data_file)
-    # data_file = 'data/data_all.npz'
-    # train_loader, test_loader = data_util.get_numpy_dataset(filenames, args.batch_size, data_file)
+    # data_file = 'data/data_small.npz'
+    # train_loader, test_loader = data_util.get_numpy_dataset(filenames[-100:-20], args.batch_size, data_file)
+    data_file = 'data/data_all.npz'
+    train_loader, test_loader = data_util.get_numpy_dataset(filenames, args.batch_size, data_file)
 
     trainer = Trainer(args, train_loader, test_loader)
     if args.load_model:
