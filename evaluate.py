@@ -130,8 +130,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     debug_path = './debug/end2end_%s_%d'%(args.exp_name, args.input_epoch)
+    debug_path_train = os.path.join(debug_path, 'train')
+    debug_path_test = os.path.join(debug_path, 'test')
     if not os.path.exists(debug_path):
         os.mkdir(debug_path)
+        os.mkdir(debug_path_train)
+        os.mkdir(debug_path_test)
     fire_palette = imageio.imread('./image/fire_palette.png')[0][:, 0:3]
     fw = open(os.path.join(debug_path, 'log%d.txt'%args.input_epoch), 'w')
 
@@ -144,16 +148,41 @@ if __name__ == '__main__':
     filenames = [line.rstrip() for line in open('data/file_lists.txt')]
     # test_dataset= data_util.MVSdataset_lithium(data_file)
 
-    # data_file = './data/data_small.npz'
-    # train_loader, test_loader = data_util.get_numpy_dataset(filenames[-100:-20], args.batch_size, data_file)
+    data_file = './data/data_small.npz'
+    train_loader, test_loader = data_util.get_numpy_dataset(filenames[-100:-20], args.batch_size, data_file)
 
-    data_file = 'data/data_all.npz'
-    train_loader, test_loader = data_util.get_numpy_dataset(filenames, args.batch_size, data_file)
+    # data_file = 'data/data_all.npz'
+    # train_loader, test_loader = data_util.get_numpy_dataset(filenames, args.batch_size, data_file)
     # filenames = [line.split('/')[6] for line in open('debug/log.txt') if line.startswith('/disk')]
     # test_dataset= data_util.MVSdataset(gt_path, data_path, kml_path, filenames)
     Predictor = Predictor(args)
     Predictor.D.load_state_dict(torch.load(os.path.join('./results', args.exp_name, 'models', 'epoch_%d'%(args.input_epoch))))
 
+    for i, batch in enumerate(train_loader):
+        dmap, hmap, hmap_all, loss = Predictor.forward(batch)
+        left_img = batch['images'][0]
+        gt_data = batch['ys'][0]
+        rsme, acc, com, l1e = eval_util.evaluate(hmap, gt_data)
+        rsmes.append(rsme)
+        accs.append(acc)
+        coms.append(com)
+        l1es.append(l1e)
+        fw.write('The errors for asp are: loss = %.4f, rsme = %.4f, acc = %.4f, com = %.4f, l1e = %.4f\n'%(loss.cpu().data, rsme, acc, com, l1e))
+
+        # left_img = geo_utils.open_gtiff(os.path.join(data_path, filenames[i], 'cropped_images', '02APR15WV031000015APR02134718-P1BS-500497282050_01_P001_________AAE_0AAAAABPABJ0.NTF.tif'))
+        # imageio.imsave(os.path.join(debug_path, filenames[i]+'_leftimg.png'), left_img[bbox[0]:bbox[1], bbox[2]:bbox[3]])
+
+        # import ipdb;ipdb.set_trace()
+        imageio.imsave(os.path.join(debug_path_train, batch['names'][0]+'_disp.png'), dmap[0].cpu().data.numpy())
+        color_map = eval_util.getColorMapFromPalette(dmap[0].cpu().data.numpy(), fire_palette)
+        imageio.imsave(os.path.join(debug_path_train, batch['names'][0]+'_disp_color.png'), color_map)
+        imageio.imsave(os.path.join(debug_path_train, batch['names'][0]+'_left.png'), left_img[0])
+        color_map = eval_util.getColorMapFromPalette(hmap, fire_palette)
+        imageio.imsave(os.path.join(debug_path_train, batch['names'][0]+'_height.png'), color_map)
+        color_map = eval_util.getColorMapFromPalette(hmap_all, fire_palette)
+        imageio.imsave(os.path.join(debug_path_train, batch['names'][0]+'_height_all.png'), color_map)
+        color_map = eval_util.getColorMapFromPalette(gt_data.data.numpy(), fire_palette)
+        imageio.imsave(os.path.join(debug_path_train, batch['names'][0]+'_gt.png'), color_map)
 
     for i, batch in enumerate(test_loader):
         dmap, hmap, hmap_all, loss = Predictor.forward(batch)
@@ -170,16 +199,16 @@ if __name__ == '__main__':
         # imageio.imsave(os.path.join(debug_path, filenames[i]+'_leftimg.png'), left_img[bbox[0]:bbox[1], bbox[2]:bbox[3]])
 
         # import ipdb;ipdb.set_trace()
-        imageio.imsave(os.path.join(debug_path, batch['names'][0]+'_disp.png'), dmap[0].cpu().data.numpy())
+        imageio.imsave(os.path.join(debug_path_test, batch['names'][0]+'_disp.png'), dmap[0].cpu().data.numpy())
         color_map = eval_util.getColorMapFromPalette(dmap[0].cpu().data.numpy(), fire_palette)
-        imageio.imsave(os.path.join(debug_path, batch['names'][0]+'_disp_color.png'), color_map)
-        imageio.imsave(os.path.join(debug_path, batch['names'][0]+'_left.png'), left_img[0])
+        imageio.imsave(os.path.join(debug_path_test, batch['names'][0]+'_disp_color.png'), color_map)
+        imageio.imsave(os.path.join(debug_path_test, batch['names'][0]+'_left.png'), left_img[0])
         color_map = eval_util.getColorMapFromPalette(hmap, fire_palette)
-        imageio.imsave(os.path.join(debug_path, batch['names'][0]+'_height.png'), color_map)
+        imageio.imsave(os.path.join(debug_path_test, batch['names'][0]+'_height.png'), color_map)
         color_map = eval_util.getColorMapFromPalette(hmap_all, fire_palette)
-        imageio.imsave(os.path.join(debug_path, batch['names'][0]+'_height_all.png'), color_map)
+        imageio.imsave(os.path.join(debug_path_test, batch['names'][0]+'_height_all.png'), color_map)
         color_map = eval_util.getColorMapFromPalette(gt_data.data.numpy(), fire_palette)
-        imageio.imsave(os.path.join(debug_path, batch['names'][0]+'_gt.png'), color_map)
+        imageio.imsave(os.path.join(debug_path_test, batch['names'][0]+'_gt.png'), color_map)
 
         del dmap, hmap, hmap_all, loss
 

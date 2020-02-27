@@ -24,7 +24,7 @@ def load_bbox(path):
 def save_height(outpath, hms, fns, mode):
     # hms: N x length x length
     for hm, fn in zip(hms, fns):
-        np.save(os.path.join(os.path.join('../results', outpath, mode), fn+'.npy'), hm)
+        np.save(os.path.join(os.path.join('./results', outpath, mode), fn+'.npy'), hm)
 
 
 def invert_homography(i):
