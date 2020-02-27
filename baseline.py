@@ -10,13 +10,29 @@ def partial_median(x):
     med = np.median(x[:k][x[k:].astype(bool)])
     return med
 
+def nan_helper(y):
+    return y==0, lambda z: z.nonzero()[0]
+
+def fill_0(y):
+    '''
+    interpolate to fill nan values
+    '''
+    nans, x= nan_helper(y)
+    y[nans]= np.interp(x(nans), x(~nans), y[~nans])
+    return y
+    
+def fill_holes(data):
+    mask = data==0
+    data[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), data[~mask])
+    return data
+
 n_pair = 6
 save_fig = True
 # mode = 'test_outdomain'
 mode = 'test'
 input_temp = 'FF-%d.npy'
 input_img_temp = '%d-color.png'
-result_path = './results/baseline'
+result_path = './results/baseline_small'
 data_path = '/disk/songwei/LockheedMartion/end2end/'
 input_path = '/disk/songwei/LockheedMartion/end2end/MVS'
 gt_path = '/disk/songwei/LockheedMartion/end2end/DSM'
@@ -28,7 +44,8 @@ fire_palette = misc.imread(os.path.join('image/fire_palette.png'))[0][:, 0:3]
 
 asp_scores = []
 
-filenames = [line.rstrip() for line in open('data/file_lists.txt') if int(line.rstrip().split('_')[2]) <= 33]
+# filenames = [line.rstrip() for line in open('data/file_lists.txt') if int(line.rstrip().split('_')[2]) <= 33]
+filenames = [line.rstrip() for line in open('data/file_lists.txt')][-100:-20] 
 print('Number of test data: %d'%len(filenames))
 for filename in filenames:
     out_path = os.path.join(result_path, filename)
@@ -39,7 +56,9 @@ for filename in filenames:
     if save_fig:
         color_map = eval_util.getColorMapFromPalette(height, fire_palette)
         misc.imsave(out_path+'_input_height%d.png'%0, color_map)
-        copyfile(os.path.join(input_path, filename, input_img_temp%0), out_path+'_input_color%d.png'%0)
+        # import ipdb;ipdb.set_trace()
+        input_file = misc.imread(os.path.join(input_path, filename, input_img_temp%0))
+        misc.imsave(out_path+'_input_color%d.png'%0, fill_holes(input_file))
 
     # load gt
     gt_data = np.load(os.path.join(gt_path, filename+'.npy'))
