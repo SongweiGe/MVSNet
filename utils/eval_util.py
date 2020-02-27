@@ -54,8 +54,8 @@ def completeness(inh, gth):
     return cpm_count/count
 
 def evaluate(input_data, gt_data):
-    rsme_metric = RSME(input_data, gt_data)
-    acc_metric = accuracy(input_data, gt_data)
-    com_metric = completeness(input_data, gt_data)
-    l1e_metric = L1E(input_data, gt_data)
+    rsme_metric = RSME(input_data, gt_data.data.numpy())
+    acc_metric = accuracy(input_data, gt_data.data.numpy())
+    com_metric = completeness(input_data, gt_data.data.numpy())
+    l1e_metric = L1E(input_data, gt_data.data.numpy())
     return rsme_metric, acc_metric[0], com_metric, l1e_metric

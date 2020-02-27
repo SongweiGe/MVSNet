@@ -170,16 +170,16 @@ if __name__ == '__main__':
         # imageio.imsave(os.path.join(debug_path, filenames[i]+'_leftimg.png'), left_img[bbox[0]:bbox[1], bbox[2]:bbox[3]])
 
         # import ipdb;ipdb.set_trace()
-        imageio.imsave(os.path.join(debug_path, filenames[i]+'_disp.png'), dmap[0].cpu().data.numpy())
+        imageio.imsave(os.path.join(debug_path, batch['names'][0]+'_disp.png'), dmap[0].cpu().data.numpy())
         color_map = eval_util.getColorMapFromPalette(dmap[0].cpu().data.numpy(), fire_palette)
-        imageio.imsave(os.path.join(debug_path, filenames[i]+'_disp_color.png'), color_map)
-        imageio.imsave(os.path.join(debug_path, filenames[i]+'_left.png'), left_img[0])
+        imageio.imsave(os.path.join(debug_path, batch['names'][0]+'_disp_color.png'), color_map)
+        imageio.imsave(os.path.join(debug_path, batch['names'][0]+'_left.png'), left_img[0])
         color_map = eval_util.getColorMapFromPalette(hmap, fire_palette)
-        imageio.imsave(os.path.join(debug_path, filenames[i]+'_height.png'), color_map)
+        imageio.imsave(os.path.join(debug_path, batch['names'][0]+'_height.png'), color_map)
         color_map = eval_util.getColorMapFromPalette(hmap_all, fire_palette)
-        imageio.imsave(os.path.join(debug_path, filenames[i]+'_height_all.png'), color_map)
+        imageio.imsave(os.path.join(debug_path, batch['names'][0]+'_height_all.png'), color_map)
         color_map = eval_util.getColorMapFromPalette(gt_data.data.numpy(), fire_palette)
-        imageio.imsave(os.path.join(debug_path, filenames[i]+'_gt.png'), color_map)
+        imageio.imsave(os.path.join(debug_path, batch['names'][0]+'_gt.png'), color_map)
 
         del dmap, hmap, hmap_all, loss
 
