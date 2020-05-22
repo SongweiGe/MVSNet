@@ -10,6 +10,8 @@ from torch.autograd import Variable
 
 import utils.data_util as data_util
 from utils.model_util import FlowNetS
+# from utils.stackhourglass import PSMNet
+from utils.basic import PSMNet
 
 from utils import geo_utils
 from triangulationRPC_matrix_torch import triangulationRPC_matrix
@@ -23,7 +25,9 @@ class Trainer(object):
         self.batch_size = args.batch_size
         self.img_size = args.img_size
         self.start_epoch = args.input_epoch
-        self.D = FlowNetS().cuda()
+        # self.D = FlowNetS().cuda()
+        self.D = PSMNet(maxdisp=48).cuda()
+        
         # self.L = nn.MSELoss().cuda()
         self.L = nn.L1Loss().cuda()
         self.optimizer = torch.optim.Adadelta(self.D.parameters(), lr=1e-0)
@@ -50,31 +54,46 @@ class Trainer(object):
         return y0, y1
 
     def triangulation_forward(self, disparity_map, masks, rpc_pair, h_pair, area_info):
-        masks = masks[0]
+        c_min, c_max, r_min, r_max = masks[0]
         rpc_l, rpc_r = rpc_pair[0]
         h_left_inv, h_right_inv = h_pair[0]
 
         # transform into numpy to process the X and Y coordinates
         area_info = area_info.data.numpy()
         bbox, bounds, im_size = area_info[0, :4], np.stack([area_info[0, 4:6], area_info[0, 6:8]]), area_info[0, -2:]
-        cu2_rec = self.cu1_rec + disparity_map[0, :, :].type(torch.cuda.DoubleTensor)
-        ru2_rec = self.ru1_rec
-        # cu2_rec = cu1_rec
+        # import ipdb;ipdb.set_trace()
 
-        cu1, ru1 = self.apply_homography(h_left_inv, [self.cu1_rec, self.ru1_rec])
+        # cu2_rec = self.cu1_rec + disparity_map[0, :, :].type(torch.cuda.DoubleTensor)
+        # ru2_rec = self.ru1_rec
+        # # cu2_rec = cu1_rec
+        # cu1, ru1 = self.apply_homography(h_left_inv, [self.cu1_rec, self.ru1_rec])
+        # cu2, ru2 = self.apply_homography(h_right_inv, [cu2_rec, ru2_rec])
+
+        # ru1 = ru1[masks].reshape(-1)
+        # cu1 = cu1[masks].reshape(-1)
+        # ru2 = ru2[masks].reshape(-1)
+        # cu2 = cu2[masks].reshape(-1)
+        # Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1[:630000], cu1[:630000], ru2[:630000], cu2[:630000], rpc_l, rpc_r, verbose=False, inverse_bs=1000)
+
+        cu1_rec = self.cu1_rec[c_min:c_max, r_min:r_max]
+        ru1_rec = self.ru1_rec[c_min:c_max, r_min:r_max]
+        cu2_rec = cu1_rec + disparity_map[0, :, :].type(torch.cuda.DoubleTensor)
+        ru2_rec = ru1_rec
+
+        cu1, ru1 = self.apply_homography(h_left_inv, [cu1_rec, ru1_rec])
         cu2, ru2 = self.apply_homography(h_right_inv, [cu2_rec, ru2_rec])
 
-        ru1 = ru1[masks].reshape(-1)
-        cu1 = cu1[masks].reshape(-1)
-        ru2 = ru2[masks].reshape(-1)
-        cu2 = cu2[masks].reshape(-1)
-        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1[:630000], cu1[:630000], ru2[:630000], cu2[:630000], rpc_l, rpc_r, verbose=False, inverse_bs=1000)
+        ru1 = ru1.reshape(-1)
+        cu1 = cu1.reshape(-1)
+        ru2 = ru2.reshape(-1)
+        cu2 = cu2.reshape(-1)
+        Xu, Yu, Zu, _, _ = triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc_l, rpc_r, verbose=False, inverse_bs=1000)
 
         lons, lats = self.wgs84(Xu.cpu().data.numpy(), Yu.cpu().data.numpy())
         ix, iy = geo_utils.spherical_to_image_positions(lons, lats, bounds, im_size)
         # import ipdb;ipdb.set_trace()
 
-        valid_points = np.logical_and(np.logical_and(iy>bbox[0], iy<bbox[0]+250), np.logical_and(ix>bbox[2], ix<bbox[2]+250))
+        valid_points = np.logical_and(np.logical_and(iy>bbox[0], iy<bbox[1]), np.logical_and(ix>bbox[2], ix<bbox[3]))
         # input_coords = torch.stack([torch.cuda.FloatTensor(iy), torch.cuda.FloatTensor(ix)])
         # output_coords = torch.stack([torch.cuda.FloatTensor(self.yy), torch.cuda.FloatTensor(self.xx)])
         # int_im = self.interp_method(input_coords, Zu[valid_points], output_coords)
@@ -97,30 +116,49 @@ class Trainer(object):
         outputs = []
         print('start training')
 
-        for j in range(self.n_epochs):
+        for j in range(self.n_epochs-self.start_epoch):
             begin = time.time()
             train_epoch_loss = []
             test_epoch_loss = []
             for k, batch in enumerate(self.train_loader):
+                if k < 131: 
+                    continue
+                # if k == 132:
+                #     import ipdb;ipdb.set_trace()
                 #forward calculation and back propagation, X: B x P x 2 x W x H
-                X, masks, h_pair, rpc_pair, area_info, Y, filenames = batch['images'].cuda(), batch['masks'], batch['hs'].cuda(),\
+                X, masks, h_pair, rpc_pair, area_info, Y, filenames = batch['images'].float().cuda(), batch['masks'], batch['hs'].cuda(),\
                                                                     batch['rpcs'].cuda(), batch['area_infos'], batch['ys'].cuda(), batch['names']
                 
                 self.optimizer.zero_grad()
-                disparity_map = self.D(X)[0][:, 0, :, :] # only left disp map
-                lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map, masks, rpc_pair, h_pair, area_info)
+
+                # mask_size = 320
+                # disparity_map = self.D(X[:, 0:1, :mask_size, :mask_size], X[:, 1:2, :mask_size, :mask_size]) # PSMNet
+                try:
+                    disparity_map = self.D(X[:, 0:1, :, :], X[:, 1:2, :, :]) # PSMNet
+                except:
+                    import ipdb;ipdb.set_trace()
+                # disparity_map = self.D(X[:, 0:1, :, :], X[:, 1:2, :, :]) # PSMNet
+
+                # disparity_map = self.D(X)[0][:, 0, :, :] # only left disp map
                 # import ipdb;ipdb.set_trace()
+                loss_batch = 0
+                for batch_id in range(len(filenames)):
+                    lon, lat, heights, Xu, Yu, Zu = self.triangulation_forward(disparity_map[batch_id:batch_id+1], masks[batch_id:batch_id+1], 
+                        rpc_pair[batch_id:batch_id+1], h_pair[batch_id:batch_id+1], area_info[batch_id:batch_id+1])
                 # print('range of predicted height: (%.3f, %.3f), ground truth: (%.3f, %.3f)'%(heights.min(), heights.max(), Y.min(), Y.max()))
-                loss = self.calculate_loss(lon, lat, heights, Y[0:1])
-                loss_val = loss.data.cpu().numpy()
+                    loss = self.calculate_loss(lon, lat, heights, Y[batch_id:batch_id+1])
+                    loss_batch += loss
+                loss_batch = loss_batch/len(filenames)
+                loss_val = loss_batch.data.cpu().numpy()
                 # print('The number of remaining points:%d'%len(lon))
                 if np.isnan(loss_val):
                     continue
                     # import ipdb;ipdb.set_trace()
-                loss.backward()
+                # import ipdb;ipdb.set_trace()
+                loss_batch.backward()
                 self.optimizer.step()
                 train_epoch_loss.append(loss_val)
-                del X,Y,lon, lat, heights,loss
+                # del X,Y,lon, lat, heights,loss, loss_batch, disparity_map
                 print("Epochs %d, iteration: %d, time = %ds, training loss: %f"%(j+self.start_epoch, k, time.time() - begin, loss_val))
             
             if (j+self.start_epoch+1)%5 == 0:
@@ -150,9 +188,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-n', '--exp_name', type=str, default='rpcnet', help='the name to identify current experiment')
     parser.add_argument("-ie", "--input_epoch", type=int, default=0, help='Load model after n epochs')
-    parser.add_argument("-ld", "--load_model", type=int, default=0, help='Load pretrained model or not')
+    parser.add_argument("-lp", "--load_pretrain", action='store_true', help='Load pretrained model or not')
+    parser.add_argument("-ld", "--load_model", action='store_true', help='Load pretrained model or not')
     parser.add_argument('-e', '--epochs', type=int, default=500, help='How many epochs to run in total?')
-    parser.add_argument('-b', '--batch_size', type=int, default=2, help='Batch size during training per GPU')
+    parser.add_argument('-b', '--batch_size', type=int, default=1, help='Batch size during training per GPU')
     parser.add_argument('-s', '--seed', type=int, default=0, help='random seed for generating data')
     parser.add_argument('-g', '--gpu_id', type=str, default='0', help='gpuid used for trianing')
     parser.add_argument('-m', '--model', type=str, default='plain', help='which model to be used')
@@ -180,12 +219,24 @@ if __name__ == '__main__':
 
     ### load data from numpy file###
     # data_file = 'data/data_small.npz'
-    # train_loader, test_loader = data_util.get_numpy_dataset(filenames[-100:-20], args.batch_size, data_file)
-    data_file = 'data/data_all.npz'
-    train_loader, test_loader = data_util.get_numpy_dataset(filenames, args.batch_size, data_file)
+    # train_loader, _, test_loader = data_util.get_numpy_dataset(filenames[-100:-20], args.batch_size, data_file, validation=False)
+    # data_file = 'data/data_all.npz'
+    # train_loader, _, test_loader = data_util.get_numpy_dataset(filenames, args.batch_size, data_file, validation=False)
+    data_file = 'data/data_masked.npz'
+    train_loader, _, test_loader = data_util.get_masked_numpy_dataset(filenames, args.batch_size, data_file, validation=False)
 
     trainer = Trainer(args, train_loader, test_loader)
     if args.load_model:
+        print('loading model from epoch %d'%args.input_epoch)
+        trainer.D.load_state_dict(torch.load(os.path.join('results', args.exp_name, 'models', 'epoch_%d'%args.input_epoch)))
+        # dic = torch.load(os.path.join('./results/pretrain_psmnet/models', 'epoch_%d'%args.input_epoch))
+        # state_dic_new = {key.replace('module.', ''): item for key, item in dic.items()}
+        # trainer.D.load_state_dict(state_dic_new)
+
+    if args.load_pretrain:
         print('loading pretrained model from epoch %d'%args.input_epoch)
-        trainer.D.load_state_dict(torch.load(os.path.join('./results/pretrain/models', 'epoch_%d'%args.input_epoch)))
+        # trainer.D.load_state_dict(torch.load(os.path.join('./results/pretrain_psmnet/models', 'epoch_%d'%args.input_epoch)))
+        dic = torch.load(os.path.join('./results/pretrain_psmnet/models', 'epoch_%d'%args.input_epoch))
+        state_dic_new = {key.replace('module.', ''): item for key, item in dic.items()}
+        trainer.D.load_state_dict(state_dic_new)
     trainer.run()

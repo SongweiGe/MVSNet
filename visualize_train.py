@@ -4,8 +4,10 @@ import matplotlib.pyplot as plt
 model1 = 'mvsnet_large0'
 model2 = 'mvsnet_large99'
 model3 = 'mvsnet_large239'
-models = [model1, model2, model3]
-names = ['no_pretrain', '50 epochs', '250 epochs']
+# models = [model1, model2, model3]
+models = [model1, model3]
+# names = ['no_pretrain', '50 epochs', '250 epochs']
+names = ['no_pretrain', '250 epochs']
 
 losses = []
 for modelname in models:

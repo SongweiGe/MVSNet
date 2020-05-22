@@ -45,6 +45,14 @@ def spherical_to_image_positions(lons, lats, bounds, im_size):
     return x, y
 
 
+def image_positions_to_spherical(x, y, bounds, im_size):
+    # import ipdb;ipdb.set_trace()
+    y = y/im_size[0]
+    x = x/im_size[1]
+    lons = y*(bounds[0][1] - bounds[0][0]) + bounds[0][0]
+    lats = x*(bounds[1][1] - bounds[1][0]) + bounds[1][0]
+    return lons, lats
+
     
 def fill_holes(data):
     mask = np.isnan(data)

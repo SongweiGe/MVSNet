@@ -67,6 +67,38 @@ def RPCforwardform_matrix(p,q,X,Y,Z):
     pixel_coordinate=num/den
     return pixel_coordinate
 
+
+def RPCforwardform_matrix_numpy(p,q,X,Y,Z):
+    npoints = len(X)
+    # num = torch.zeros((npoints,20.double().cuda()))
+    # den = torch.zeros((npoints,20.double().cuda()))
+    monomial = np.stack([np.ones(npoints), X, Y, Z, X*Y, X*Z, Y*Z, X**2, Y**2, Z**2, X*Y*Z, 
+                X**3, X*Y**2, X*Z**2, X**2*Y, Y**3, Y*Z**2, X**2*Z, Y**2*Z, Z**3])
+    num = np.sum(p.reshape(-1, 1)*monomial, 0)
+    den = np.sum(q.reshape(-1, 1)*monomial, 0)
+    if (den == 0).all():
+        den = 1
+    pixel_coordinate=num/den
+    return pixel_coordinate
+
+def RPCforward(Xu, Yu, Zu, rpc):
+    p1 = rpc[10:30]
+    p2 = rpc[30:50]
+    p3 = rpc[50:70]
+    p4 = rpc[70:90]
+    ro, co, Yo, Xo, Zo, rs, cs, Ys, Xs, Zs = rpc[:10]
+
+    NormX=RPCnormalization(Xu,Xo,Xs)
+    NormY=RPCnormalization(Yu,Yo,Ys)
+    NormZ=RPCnormalization(Zu,Zo,Zs)
+
+    r =  RPCforwardform_matrix_numpy(p1,p2,NormX,NormY,NormZ)
+    c =  RPCforwardform_matrix_numpy(p3,p4,NormX,NormY,NormZ)
+
+    ru = RPCunnormalization(r,ro,rs)
+    cu = RPCunnormalization(c,co,cs)
+    return ru, cu
+
 '''
       |a  b  c|
 mat = |d  e  f|
@@ -425,10 +457,10 @@ def triangulationRPC_matrix(ru1, cu1, ru2, cu2, rpc1, rpc2, verbose, inverse_bs=
         r2_est =  RPCforwardform_matrix(p1_2,p2_2,NormXnew_2,NormYnew_2,NormZnew_2)
         c2_est =  RPCforwardform_matrix(p3_2,p4_2,NormXnew_2,NormYnew_2,NormZnew_2)
         # unnormalize        
-        r1_est = RPCunnormalization(r1_est,rs_1,ro_1)
-        c1_est = RPCunnormalization(c1_est,cs_1,co_1)
-        r2_est = RPCunnormalization(r2_est,rs_2,ro_2)
-        c2_est = RPCunnormalization(c2_est,cs_2,co_2)
+        r1_est = RPCunnormalization(r1_est,ro_1,rs_1)
+        c1_est = RPCunnormalization(c1_est,co_1,cs_1)
+        r2_est = RPCunnormalization(r2_est,ro_2,rs_2)
+        c2_est = RPCunnormalization(c2_est,co_2,cs_2)
         # r1_est = RPCunnormalization(r1_est,scale_offsets_1[7-1],scale_offsets_1[9-1])
         # c1_est = RPCunnormalization(c1_est,scale_offsets_1[8-1],scale_offsets_1[10-1])
         # r2_est = RPCunnormalization(r2_est,scale_offsets_2[7-1],scale_offsets_2[9-1])
